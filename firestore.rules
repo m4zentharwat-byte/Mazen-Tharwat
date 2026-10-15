@@ -197,7 +197,8 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'articleId', 'title', 'category', 'summary', 'content',
-          'isFavorite', 'recommendedSop', 'createdBy', 'createdAt', 'updatedAt'
+          'isFavorite', 'recommendedSop', 'createdBy', 'createdAt', 'updatedAt',
+          'bannerImage', 'documentHtml', 'fileName', 'docVersion', 'classification'
         ]) &&
         data.articleId is string && data.articleId.size() >= 3 && data.articleId.size() <= 32 && data.articleId.matches('^[a-zA-Z0-9_\\-]+$') &&
         data.title is string && data.title.size() >= 3 && data.title.size() <= 200 &&
@@ -209,13 +210,18 @@ service cloud.firestore {
           'Unassigned Batches & Route Reassignment',
           'Retail Partner In-Store Pickups'
         ] &&
-        data.summary is string && data.summary.size() >= 5 && data.summary.size() <= 500 &&
-        data.content is string && data.content.size() >= 10 && data.content.size() <= 4096 &&
+        data.summary is string && data.summary.size() >= 5 && data.summary.size() <= 1000 &&
+        data.content is string && data.content.size() >= 10 && data.content.size() <= 20000 &&
         data.isFavorite is bool &&
-        data.recommendedSop is string && data.recommendedSop.size() >= 5 && data.recommendedSop.size() <= 1000 &&
+        data.recommendedSop is string && data.recommendedSop.size() >= 5 && data.recommendedSop.size() <= 2000 &&
         data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 && data.createdBy.matches('^[a-zA-Z0-9_\\-]+$') &&
         data.createdAt is timestamp &&
-        data.updatedAt is timestamp;
+        data.updatedAt is timestamp &&
+        (!('bannerImage' in data) || (data.bannerImage is string && data.bannerImage.size() <= 200000)) &&
+        (!('documentHtml' in data) || (data.documentHtml is string && data.documentHtml.size() <= 50000)) &&
+        (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 128)) &&
+        (!('docVersion' in data) || (data.docVersion is string && data.docVersion.size() <= 64)) &&
+        (!('classification' in data) || (data.classification is string && data.classification.size() <= 64));
     }
 
     function isValidAgentNote(data) {

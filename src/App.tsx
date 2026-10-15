@@ -45,6 +45,9 @@ import {
   Sparkles,
   Truck,
   Star,
+  ShieldCheck,
+  ArrowLeft,
+  User,
 } from 'lucide-react';
 import {
   auth,
@@ -140,6 +143,11 @@ export default function App() {
   const [tierFilter, setTierFilter] = useState<'ALL' | CustomerTier>('ALL');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'ALL' | CaseStatus>('ALL');
   const [caseKbTab, setCaseKbTab] = useState<'recommended' | 'favorites'>('recommended');
+
+  // Account Search & Review State (for workspace hiding and lookup)
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [accountSearchCriteria, setAccountSearchCriteria] = useState<'all' | 'phone' | 'account' | 'name'>('all');
+  const [activeAccountTab, setActiveAccountTab] = useState<'cases' | 'profile' | 'interactions' | 'security'>('cases');
 
   // Firestore Collections
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
@@ -336,7 +344,7 @@ export default function App() {
         list.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
         setCustomers(list);
         setSelectedCustomerId((prev) =>
-          prev && list.some((c) => c.id === prev) ? prev : list[0]?.id || null
+          prev && list.some((c) => c.id === prev) ? prev : null
         );
         setDataLoading(false);
       },
@@ -561,7 +569,7 @@ export default function App() {
 
   // Selected Entities
   const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === selectedCustomerId) || customers[0] || null,
+    () => (selectedCustomerId ? customers.find((c) => c.id === selectedCustomerId) || null : null),
     [customers, selectedCustomerId]
   );
 
@@ -575,10 +583,10 @@ export default function App() {
 
   const selectedCase = useMemo(
     () =>
-      customerCases.find((c) => c.id === selectedCaseId) ||
-      customerCases[0] ||
-      null,
-    [customerCases, selectedCaseId]
+      selectedCustomer
+        ? customerCases.find((c) => c.id === selectedCaseId) || customerCases[0] || null
+        : null,
+    [customerCases, selectedCaseId, selectedCustomer]
   );
 
   const customerInteractions = useMemo(
@@ -587,6 +595,12 @@ export default function App() {
         ? interactions.filter((i) => i.customerId === selectedCustomer.id)
         : [],
     [interactions, selectedCustomer]
+  );
+
+  const currentVault = useMemo(
+    () =>
+      selectedCustomer ? decryptedVaultMap[selectedCustomer.id] || null : null,
+    [selectedCustomer, decryptedVaultMap]
   );
 
   // Recommended KB Articles matching the selected case
@@ -637,6 +651,42 @@ export default function App() {
       (c) => caseStatusFilter === 'ALL' || c.status === caseStatusFilter
     );
   }, [cases, caseStatusFilter]);
+
+  // High-performance account lookup for Workspace
+  const searchedAccounts = useMemo(() => {
+    const q = accountSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return customers.filter((c) => {
+      if (accountSearchCriteria === 'phone') {
+        return c.phone.toLowerCase().replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, ''));
+      }
+      if (accountSearchCriteria === 'account') {
+        return c.accountNumber.toLowerCase().includes(q);
+      }
+      if (accountSearchCriteria === 'name') {
+        return c.fullName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+      }
+      return (
+        c.fullName.toLowerCase().includes(q) ||
+        c.accountNumber.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.company.toLowerCase().includes(q)
+      );
+    });
+  }, [customers, accountSearchQuery, accountSearchCriteria]);
+
+  const handleOpenAccount = (customer: CustomerProfile) => {
+    setSelectedCustomerId(customer.id);
+    const firstCase = cases.find((c) => c.customerId === customer.id);
+    setSelectedCaseId(firstCase?.id || null);
+    setActiveAccountTab('cases');
+  };
+
+  const handleCloseAccount = () => {
+    setSelectedCustomerId(null);
+    setSelectedCaseId(null);
+  };
 
   // Handlers: Auth
   const handleGoogleSignIn = async () => {
@@ -692,6 +742,9 @@ export default function App() {
     if (matched) {
       setActiveCallCustomer(matched);
       setSelectedCustomerId(matched.id);
+      const firstCase = cases.find((c) => c.customerId === matched.id);
+      setSelectedCaseId(firstCase?.id || null);
+      setActiveAccountTab('cases');
       setDialNumber(matched.phone);
     }
     playCallEventTone('connect');
@@ -713,6 +766,9 @@ export default function App() {
   const handleAnswerInboundCall = () => {
     if (activeCallCustomer) {
       setSelectedCustomerId(activeCallCustomer.id);
+      const firstCase = cases.find((c) => c.customerId === activeCallCustomer.id);
+      setSelectedCaseId(firstCase?.id || null);
+      setActiveAccountTab('cases');
       setActiveNav('workspace');
     }
     setCallDuration(0);
@@ -835,25 +891,68 @@ export default function App() {
     content: string;
     recommendedSop: string;
     isFavorite: boolean;
+    fileName?: string;
+    docVersion?: string;
+    classification?: string;
+    bannerImage?: string;
   }) => {
     if (!user) return;
     const docId = sanitizeId(`art_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
     const path = `knowledgeArticles/${docId}`;
+    const payload: any = {
+      articleId: sanitizeId(data.articleId),
+      title: sanitizeString(data.title, 3, 200, 'Logistics SOP'),
+      category: data.category,
+      summary: sanitizeString(data.summary, 5, 1000, 'Summary'),
+      content: sanitizeString(data.content, 10, 20000, 'Content'),
+      isFavorite: data.isFavorite,
+      recommendedSop: sanitizeString(data.recommendedSop, 5, 2000, 'Recommended SOP'),
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (data.fileName) payload.fileName = sanitizeString(data.fileName, 3, 128, 'Manual.docx');
+    if (data.docVersion) payload.docVersion = sanitizeString(data.docVersion, 1, 64, 'v3.4');
+    if (data.classification) payload.classification = sanitizeString(data.classification, 3, 64, 'CONFIDENTIAL');
+    if (data.bannerImage) payload.bannerImage = data.bannerImage.slice(0, 200000);
+
     try {
-      await setDoc(doc(db, 'knowledgeArticles', docId), {
-        articleId: sanitizeId(data.articleId),
-        title: sanitizeString(data.title, 3, 200, 'Logistics SOP'),
-        category: data.category,
-        summary: sanitizeString(data.summary, 5, 500, 'Summary'),
-        content: sanitizeString(data.content, 10, 4000, 'Content'),
-        isFavorite: data.isFavorite,
-        recommendedSop: sanitizeString(data.recommendedSop, 5, 1000, 'Recommended SOP'),
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await setDoc(doc(db, 'knowledgeArticles', docId), payload);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  };
+
+  const handleUpdateArticle = async (
+    article: KnowledgeArticle,
+    updatedData: Partial<KnowledgeArticle>
+  ) => {
+    if (!user) return;
+    const path = `knowledgeArticles/${article.id}`;
+    const payload: any = {
+      updatedAt: serverTimestamp(),
+    };
+    if (updatedData.title !== undefined) payload.title = sanitizeString(updatedData.title, 3, 200, article.title);
+    if (updatedData.category !== undefined) payload.category = updatedData.category;
+    if (updatedData.summary !== undefined) payload.summary = sanitizeString(updatedData.summary, 5, 1000, article.summary);
+    if (updatedData.content !== undefined) payload.content = sanitizeString(updatedData.content, 10, 20000, article.content);
+    if (updatedData.recommendedSop !== undefined) payload.recommendedSop = sanitizeString(updatedData.recommendedSop, 5, 2000, article.recommendedSop);
+    if (updatedData.fileName !== undefined) payload.fileName = sanitizeString(updatedData.fileName, 3, 128, 'Manual.docx');
+    if (updatedData.docVersion !== undefined) payload.docVersion = sanitizeString(updatedData.docVersion, 1, 64, 'v3.4');
+    if (updatedData.classification !== undefined) payload.classification = sanitizeString(updatedData.classification, 3, 64, 'CONFIDENTIAL');
+    if (updatedData.bannerImage !== undefined) payload.bannerImage = updatedData.bannerImage.slice(0, 200000);
+    if (updatedData.isFavorite !== undefined) payload.isFavorite = updatedData.isFavorite;
+
+    try {
+      await updateDoc(doc(db, 'knowledgeArticles', article.id), payload);
+      await logComplianceEvent(
+        'ARTICLE_FAVORITED',
+        'KnowledgeArticle',
+        article.id,
+        `Updated Word document & banner for ${article.articleId}.`
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   };
 
@@ -2552,6 +2651,7 @@ export default function App() {
                 articles={articles}
                 onToggleFavorite={handleToggleFavoriteArticle}
                 onCreateArticle={handleCreateArticle}
+                onUpdateArticle={handleUpdateArticle}
                 onApplySopToActiveCase={handleApplySopToActiveCase}
                 onOpenAiAssistant={() => setShowAiModal(true)}
               />

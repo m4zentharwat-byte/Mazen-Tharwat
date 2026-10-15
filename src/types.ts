@@ -78,6 +78,12 @@ export interface KnowledgeArticle {
   createdBy: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  // Word Document & Rich Media Properties
+  fileName?: string;
+  documentHtml?: string;
+  bannerImage?: string;
+  docVersion?: string;
+  classification?: string;
 }
 
 export type AgentNoteCategory =

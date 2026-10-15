@@ -2,6 +2,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { encryptTextAES256GCM } from '../utils/crypto';
 import { DecryptedCustomerVault, OperatorRole } from '../types';
+import { LOGISTICS_BANNER_DIAGRAMS } from '../utils/wordDocument';
 
 export async function seedEnterpriseCallCenterData(
   uid: string,
@@ -377,6 +378,10 @@ export async function seedEnterpriseCallCenterData(
         content: art.content,
         isFavorite: art.isFavorite,
         recommendedSop: art.recommendedSop,
+        fileName: `${art.articleId}-Standard-Procedure.docx`,
+        docVersion: 'v3.4 Enterprise Logistics Edition',
+        classification: 'CONFIDENTIAL · INSTACART CARE SOP',
+        bannerImage: LOGISTICS_BANNER_DIAGRAMS[art.articleId]?.bannerUrl || '',
         createdBy: uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
