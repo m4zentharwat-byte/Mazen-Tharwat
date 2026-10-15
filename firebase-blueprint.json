@@ -1,0 +1,895 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Call center operator profile with role-based access control metadata and agent station state.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase Auth UID of the operator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified corporate email address of the operator.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full display name of the agent or supervisor.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "description": "RBAC role assigned to the operator.",
+          "enum": ["admin", "supervisor", "agent"]
+        },
+        "extension": {
+          "type": "string",
+          "description": "Cisco Finesse CTI extension number assigned to the workstation.",
+          "minLength": 3,
+          "maxLength": 16,
+          "pattern": "^[0-9\\-]+$"
+        },
+        "agentStatus": {
+          "type": "string",
+          "description": "Current CTI softphone availability state.",
+          "enum": ["Ready", "Not Ready", "Talking", "Wrap-Up"]
+        },
+        "teamQueue": {
+          "type": "string",
+          "description": "Assigned call routing precision queue.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the operator profile was provisioned."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the operator profile was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "role",
+        "extension",
+        "agentStatus",
+        "teamQueue",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted registry document granting administrative privileges to a specific UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "UID of the administrator.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the administrator.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "grantedBy": {
+          "type": "string",
+          "description": "UID of the administrator who granted this privilege.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of admin provisioning."
+        }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "CustomerProfile": {
+      "title": "CustomerProfile",
+      "description": "Customer account profile with contact details, service tier, verification status, and AES-256-GCM encrypted sensitive vault data.",
+      "type": "object",
+      "properties": {
+        "accountNumber": {
+          "type": "string",
+          "description": "Unique customer account identifier (e.g., ACC-849201).",
+          "minLength": 4,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Primary account holder full name.",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "company": {
+          "type": "string",
+          "description": "Organization or enterprise account name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "description": "Primary caller line identification (CLI / ANI) phone number.",
+          "minLength": 5,
+          "maxLength": 32
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Customer primary contact email address.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "tier": {
+          "type": "string",
+          "description": "Account service level tier.",
+          "enum": ["Enterprise", "Premier", "Standard"]
+        },
+        "verificationStatus": {
+          "type": "string",
+          "description": "Identity verification status during CTI interaction.",
+          "enum": ["Verified", "Pending", "Flagged"]
+        },
+        "region": {
+          "type": "string",
+          "description": "Geographic operating region for privacy compliance routing.",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "encryptedVaultPayload": {
+          "type": "string",
+          "description": "Client-side AES-256-GCM encrypted payload containing sensitive PII (Tax/SSN Last-4, Security PIN, Compliance Notes).",
+          "minLength": 10,
+          "maxLength": 4096
+        },
+        "encryptionAlgorithm": {
+          "type": "string",
+          "description": "Cryptographic cipher identifier used for the vault payload.",
+          "enum": ["AES-256-GCM"]
+        },
+        "integrityHash": {
+          "type": "string",
+          "description": "SHA-256 hex digest of the sensitive record for tamper detection.",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[a-fA-F0-9]+$"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who created the customer profile.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of profile creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last profile update."
+        }
+      },
+      "required": [
+        "accountNumber",
+        "fullName",
+        "company",
+        "phone",
+        "email",
+        "tier",
+        "verificationStatus",
+        "region",
+        "encryptedVaultPayload",
+        "encryptionAlgorithm",
+        "integrityHash",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ServiceCase": {
+      "title": "ServiceCase",
+      "description": "Customer service case linked to a CustomerProfile with SLA tracking, priority, status, and encrypted resolution notes.",
+      "type": "object",
+      "properties": {
+        "caseNumber": {
+          "type": "string",
+          "description": "Human-readable case ticket identifier (e.g., CS-2026-9041).",
+          "minLength": 4,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Document ID of the parent CustomerProfile.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Denormalized customer full name for high-density queue display.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "accountNumber": {
+          "type": "string",
+          "description": "Denormalized account number for instant lookup.",
+          "minLength": 4,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Concise case summary title.",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "description": "Operational classification of the issue.",
+          "enum": [
+            "Billing & Invoicing",
+            "Technical Outage",
+            "Security & Access",
+            "Hardware RMA",
+            "Contract & SLA"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "description": "Urgency level governing SLA response times.",
+          "enum": ["Critical", "High", "Medium", "Low"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Lifecycle state of the service case. Closed is a terminal state.",
+          "enum": [
+            "Open",
+            "In Progress",
+            "Pending Customer",
+            "Escalated",
+            "Resolved",
+            "Closed"
+          ]
+        },
+        "slaTargetHours": {
+          "type": "number",
+          "description": "Target resolution window in hours."
+        },
+        "description": {
+          "type": "string",
+          "description": "Operational description of the customer issue.",
+          "minLength": 3,
+          "maxLength": 2000
+        },
+        "encryptedCaseNotes": {
+          "type": "string",
+          "description": "AES-256-GCM encrypted sensitive diagnostic and resolution notes.",
+          "minLength": 10,
+          "maxLength": 4096
+        },
+        "assignedAgentName": {
+          "type": "string",
+          "description": "Display name of the assigned specialist.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who opened the case.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the case was opened."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the case was last modified."
+        }
+      },
+      "required": [
+        "caseNumber",
+        "customerId",
+        "customerName",
+        "accountNumber",
+        "subject",
+        "category",
+        "priority",
+        "status",
+        "slaTargetHours",
+        "description",
+        "encryptedCaseNotes",
+        "assignedAgentName",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "InteractionLog": {
+      "title": "InteractionLog",
+      "description": "Encrypted CTI call or customer service interaction log tied to a CustomerProfile.",
+      "type": "object",
+      "properties": {
+        "customerId": {
+          "type": "string",
+          "description": "Document ID of the associated CustomerProfile.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer name for interaction timeline display.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "caseId": {
+          "type": "string",
+          "description": "Optional related ServiceCase ID or NONE.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "channel": {
+          "type": "string",
+          "description": "Communication channel type.",
+          "enum": [
+            "Inbound Voice",
+            "Outbound Voice",
+            "Supervisor Consult",
+            "Secure Callback"
+          ]
+        },
+        "callerAni": {
+          "type": "string",
+          "description": "Caller phone number / extension.",
+          "minLength": 3,
+          "maxLength": 32
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Total call duration in seconds."
+        },
+        "disposition": {
+          "type": "string",
+          "description": "Call wrap-up disposition code.",
+          "enum": [
+            "Resolved First Call",
+            "Case Created",
+            "Follow-up Required",
+            "Transferred to Tier 2",
+            "Identity Verified Only",
+            "Voicemail Left"
+          ]
+        },
+        "publicSummary": {
+          "type": "string",
+          "description": "Non-sensitive high-level interaction summary.",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "encryptedTranscript": {
+          "type": "string",
+          "description": "Client-side AES-256-GCM encrypted call notes and sensitive customer interaction details.",
+          "minLength": 10,
+          "maxLength": 8192
+        },
+        "encryptionAlgorithm": {
+          "type": "string",
+          "description": "Cipher used to encrypt the interaction transcript.",
+          "enum": ["AES-256-GCM"]
+        },
+        "integrityHash": {
+          "type": "string",
+          "description": "SHA-256 digest of the plaintext interaction before encryption.",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[a-fA-F0-9]+$"
+        },
+        "agentName": {
+          "type": "string",
+          "description": "Name of the handling agent.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the agent who logged the interaction.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of interaction log creation."
+        }
+      },
+      "required": [
+        "customerId",
+        "customerName",
+        "caseId",
+        "channel",
+        "callerAni",
+        "durationSeconds",
+        "disposition",
+        "publicSummary",
+        "encryptedTranscript",
+        "encryptionAlgorithm",
+        "integrityHash",
+        "agentName",
+        "createdBy",
+        "createdAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable compliance audit record tracking sensitive data access, encryption events, and RBAC actions.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Type of audited security or operational event.",
+          "enum": [
+            "PROFILE_CREATED",
+            "PROFILE_UPDATED",
+            "VAULT_DECRYPTED",
+            "CASE_OPENED",
+            "CASE_STATUS_CHANGED",
+            "INTERACTION_ENCRYPTED",
+            "ROLE_UPDATED",
+            "CTI_CALL_COMPLETED",
+            "CASE_TRANSFERRED",
+            "ARTICLE_FAVORITED",
+            "NOTE_CREATED"
+          ]
+        },
+        "targetType": {
+          "type": "string",
+          "description": "Entity type affected by the action.",
+          "enum": ["Customer", "Case", "Interaction", "User", "System", "KnowledgeArticle", "AgentNote", "CaseTransfer"]
+        },
+        "targetId": {
+          "type": "string",
+          "description": "Identifier of the target entity.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "details": {
+          "type": "string",
+          "description": "Compliance audit description without raw PII.",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "actorName": {
+          "type": "string",
+          "description": "Display name of the operator who triggered the event.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "actorRole": {
+          "type": "string",
+          "description": "Role of the operator at the time of the event.",
+          "enum": ["admin", "supervisor", "agent"]
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who generated the audit log.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the audit event."
+        }
+      },
+      "required": [
+        "action",
+        "targetType",
+        "targetId",
+        "details",
+        "actorName",
+        "actorRole",
+        "createdBy",
+        "createdAt"
+      ]
+    },
+    "KnowledgeArticle": {
+      "title": "KnowledgeArticle",
+      "description": "Logistics and customer service knowledge base article with resolution SOPs, bookmarks, and case linking.",
+      "type": "object",
+      "properties": {
+        "articleId": {
+          "type": "string",
+          "description": "Alphanumeric article identifier (e.g., KB-INSTA-101).",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Article subject headline.",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "category": {
+          "type": "string",
+          "description": "Logistics category partition.",
+          "enum": [
+            "Cold Chain & Food Safety",
+            "Delivery Driver & Shopper Dispatch",
+            "Payment & Tip Protection",
+            "Damaged & Missing Groceries",
+            "Unassigned Batches & Route Reassignment",
+            "Retail Partner In-Store Pickups"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Quick scannable summary for CTI call resolution.",
+          "minLength": 5,
+          "maxLength": 500
+        },
+        "content": {
+          "type": "string",
+          "description": "Step-by-step Standard Operating Procedure (SOP).",
+          "minLength": 10,
+          "maxLength": 4096
+        },
+        "isFavorite": {
+          "type": "boolean",
+          "description": "Whether the article is marked as favorite by the operator."
+        },
+        "recommendedSop": {
+          "type": "string",
+          "description": "One-click pasteable snippet for case notes.",
+          "minLength": 5,
+          "maxLength": 1000
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who authored or saved the article.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of article creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last article update."
+        }
+      },
+      "required": [
+        "articleId",
+        "title",
+        "category",
+        "summary",
+        "content",
+        "isFavorite",
+        "recommendedSop",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AgentNote": {
+      "title": "AgentNote",
+      "description": "Personal agent notebook scratchpad for shift notes, delivery driver snippets, and instant case pastes.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Note title or shift topic.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "content": {
+          "type": "string",
+          "description": "Note content or clipboard template.",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "category": {
+          "type": "string",
+          "description": "Note classification.",
+          "enum": ["Shopper Hotline", "Cold Chain SOP", "Shift Checklist", "High-Priority Dispatch", "General"]
+        },
+        "isPinned": {
+          "type": "boolean",
+          "description": "Whether the note is pinned to top of scratchpad."
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the agent who owns this private notebook entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of note creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last note update."
+        }
+      },
+      "required": [
+        "title",
+        "content",
+        "category",
+        "isPinned",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CaseTransfer": {
+      "title": "CaseTransfer",
+      "description": "Offline case transfer and queue dispatch record for asynchronous routing across logistics tiers.",
+      "type": "object",
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "description": "Target ServiceCase ID being transferred.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "caseNumber": {
+          "type": "string",
+          "description": "Human-readable case ticket identifier.",
+          "minLength": 4,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer or shopper name for queue display.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "fromAgentName": {
+          "type": "string",
+          "description": "Transferring specialist name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "toQueue": {
+          "type": "string",
+          "description": "Destination offline queue.",
+          "enum": [
+            "Tier-2 Logistics Fleet Escalations",
+            "Cold-Chain Claims & Insurance",
+            "Shopper Trust & Safety",
+            "Store Fulfillment Operations",
+            "Executive Care Dispatch"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Primary operational rationale for offline dispatch.",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "transferStatus": {
+          "type": "string",
+          "description": "Dispatch synchronization state.",
+          "enum": ["Queued Offline", "Dispatched", "Acknowledged", "Completed"]
+        },
+        "priority": {
+          "type": "string",
+          "description": "Transfer priority level.",
+          "enum": ["Critical", "High", "Medium", "Low"]
+        },
+        "offlineNotes": {
+          "type": "string",
+          "description": "Offline handover notes for the receiving shift.",
+          "minLength": 3,
+          "maxLength": 2000
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who dispatched the case.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the transfer was logged."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when transfer status was updated."
+        }
+      },
+      "required": [
+        "caseId",
+        "caseNumber",
+        "customerName",
+        "fromAgentName",
+        "toQueue",
+        "reason",
+        "transferStatus",
+        "priority",
+        "offlineNotes",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "QaSurvey": {
+      "title": "QaSurvey",
+      "description": "Quality assurance audit scorecard and post-call customer satisfaction survey record.",
+      "type": "object",
+      "properties": {
+        "interactionId": {
+          "type": "string",
+          "description": "Associated InteractionLog or CTI session ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "caseNumber": {
+          "type": "string",
+          "description": "Related case number or GENERAL.",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer or shopper name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "agentName": {
+          "type": "string",
+          "description": "Handling specialist name.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "channel": {
+          "type": "string",
+          "description": "Communication channel.",
+          "enum": ["Inbound Voice", "Outbound Voice", "Supervisor Consult", "Secure Callback"]
+        },
+        "csatRating": {
+          "type": "number",
+          "description": "Customer satisfaction rating on 1-5 scale."
+        },
+        "fcrResolved": {
+          "type": "boolean",
+          "description": "Whether first contact resolution was achieved."
+        },
+        "qaScore": {
+          "type": "number",
+          "description": "Audited quality score percentage (0-100%)."
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Customer survey quote or QA evaluator feedback.",
+          "minLength": 3,
+          "maxLength": 1000
+        },
+        "evaluatorName": {
+          "type": "string",
+          "description": "QA lead or automated survey bot.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the operator who created/received the QA evaluation.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of survey completion."
+        }
+      },
+      "required": [
+        "interactionId",
+        "caseNumber",
+        "customerName",
+        "agentName",
+        "channel",
+        "csatRating",
+        "fcrResolved",
+        "qaScore",
+        "feedback",
+        "evaluatorName",
+        "createdBy",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Operator station profiles and RBAC role assignments."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted administrator lookup registry."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/CustomerProfile" },
+      "description": "Customer profiles with AES-256-GCM encrypted vault fields."
+    },
+    "/cases/{caseId}": {
+      "schema": { "$ref": "#/entities/ServiceCase" },
+      "description": "Customer service cases linked to customer accounts."
+    },
+    "/interactions/{interactionId}": {
+      "schema": { "$ref": "#/entities/InteractionLog" },
+      "description": "Encrypted CTI call and customer interaction logs."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable compliance and security audit trail."
+    },
+    "/knowledgeArticles/{articleId}": {
+      "schema": { "$ref": "#/entities/KnowledgeArticle" },
+      "description": "Logistics and customer service knowledge base articles."
+    },
+    "/agentNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/AgentNote" },
+      "description": "Agent shift scratchpads and clipboard notebooks."
+    },
+    "/caseTransfers/{transferId}": {
+      "schema": { "$ref": "#/entities/CaseTransfer" },
+      "description": "Offline case transfer and queue dispatch records."
+    },
+    "/qaSurveys/{surveyId}": {
+      "schema": { "$ref": "#/entities/QaSurvey" },
+      "description": "QA scorecard audits and post-call customer satisfaction surveys."
+    }
+  }
+}

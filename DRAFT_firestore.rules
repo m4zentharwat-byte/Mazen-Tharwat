@@ -1,0 +1,378 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // 0. GLOBAL SAFETY NET (Default-Deny Catch-All)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // 1. HARDENED GLOBAL PRIMITIVES
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'm4zen.tharwat@gmail.com'
+      );
+    }
+
+    // =========================================================================
+    // 2. VALIDATION BLUEPRINTS (Anti-Update-Gap Helpers)
+    // =========================================================================
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'email', 'displayName', 'role', 'extension',
+          'agentStatus', 'teamQueue', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'role', 'extension',
+          'agentStatus', 'teamQueue', 'createdAt', 'updatedAt'
+        ]) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        data.role is string && data.role in ['admin', 'supervisor', 'agent'] &&
+        data.extension is string && data.extension.size() >= 3 && data.extension.size() <= 16 && data.extension.matches('^[0-9\\-]+$') &&
+        data.agentStatus is string && data.agentStatus in ['Ready', 'Not Ready', 'Talking', 'Wrap-Up'] &&
+        data.teamQueue is string && data.teamQueue.size() >= 1 && data.teamQueue.size() <= 80 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.grantedBy is string && data.grantedBy == request.auth.uid && data.grantedBy.size() >= 1 && data.grantedBy.size() <= 128 && data.grantedBy.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCustomerProfile(data) {
+      return data.keys().hasAll([
+          'accountNumber', 'fullName', 'company', 'phone', 'email',
+          'tier', 'verificationStatus', 'region', 'encryptedVaultPayload',
+          'encryptionAlgorithm', 'integrityHash', 'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'accountNumber', 'fullName', 'company', 'phone', 'email',
+          'tier', 'verificationStatus', 'region', 'encryptedVaultPayload',
+          'encryptionAlgorithm', 'integrityHash', 'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.accountNumber is string && data.accountNumber.size() >= 4 && data.accountNumber.size() <= 32 && data.accountNumber.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+        data.company is string && data.company.size() >= 1 && data.company.size() <= 120 &&
+        data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 32 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.tier is string && data.tier in ['Enterprise', 'Premier', 'Standard'] &&
+        data.verificationStatus is string && data.verificationStatus in ['Verified', 'Pending', 'Flagged'] &&
+        data.region is string && data.region.size() >= 2 && data.region.size() <= 64 &&
+        data.encryptedVaultPayload is string && data.encryptedVaultPayload.size() >= 10 && data.encryptedVaultPayload.size() <= 4096 &&
+        data.encryptionAlgorithm is string && data.encryptionAlgorithm == 'AES-256-GCM' &&
+        data.integrityHash is string && data.integrityHash.size() >= 16 && data.integrityHash.size() <= 128 && data.integrityHash.matches('^[a-fA-F0-9]+$') &&
+        data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 && data.createdBy.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidServiceCase(data) {
+      return data.keys().hasAll([
+          'caseNumber', 'customerId', 'customerName', 'accountNumber',
+          'subject', 'category', 'priority', 'status', 'slaTargetHours',
+          'description', 'encryptedCaseNotes', 'assignedAgentName',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'caseNumber', 'customerId', 'customerName', 'accountNumber',
+          'subject', 'category', 'priority', 'status', 'slaTargetHours',
+          'description', 'encryptedCaseNotes', 'assignedAgentName',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.caseNumber is string && data.caseNumber.size() >= 4 && data.caseNumber.size() <= 32 && data.caseNumber.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.customerId is string && data.customerId.size() >= 1 && data.customerId.size() <= 128 && data.customerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120 &&
+        data.accountNumber is string && data.accountNumber.size() >= 4 && data.accountNumber.size() <= 32 && data.accountNumber.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 200 &&
+        data.category is string && data.category in [
+          'Billing & Invoicing', 'Technical Outage', 'Security & Access', 'Hardware RMA', 'Contract & SLA'
+        ] &&
+        data.priority is string && data.priority in ['Critical', 'High', 'Medium', 'Low'] &&
+        data.status is string && data.status in [
+          'Open', 'In Progress', 'Pending Customer', 'Escalated', 'Resolved', 'Closed'
+        ] &&
+        data.slaTargetHours is number && data.slaTargetHours >= 1 && data.slaTargetHours <= 720 &&
+        data.description is string && data.description.size() >= 3 && data.description.size() <= 2000 &&
+        data.encryptedCaseNotes is string && data.encryptedCaseNotes.size() >= 10 && data.encryptedCaseNotes.size() <= 4096 &&
+        data.assignedAgentName is string && data.assignedAgentName.size() >= 1 && data.assignedAgentName.size() <= 100 &&
+        data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 && data.createdBy.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidInteractionLog(data) {
+      return data.keys().hasAll([
+          'customerId', 'customerName', 'caseId', 'channel', 'callerAni',
+          'durationSeconds', 'disposition', 'publicSummary', 'encryptedTranscript',
+          'encryptionAlgorithm', 'integrityHash', 'agentName', 'createdBy', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'customerId', 'customerName', 'caseId', 'channel', 'callerAni',
+          'durationSeconds', 'disposition', 'publicSummary', 'encryptedTranscript',
+          'encryptionAlgorithm', 'integrityHash', 'agentName', 'createdBy', 'createdAt'
+        ]) &&
+        data.customerId is string && data.customerId.size() >= 1 && data.customerId.size() <= 128 && data.customerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120 &&
+        data.caseId is string && data.caseId.size() >= 1 && data.caseId.size() <= 128 && data.caseId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.channel is string && data.channel in [
+          'Inbound Voice', 'Outbound Voice', 'Supervisor Consult', 'Secure Callback'
+        ] &&
+        data.callerAni is string && data.callerAni.size() >= 3 && data.callerAni.size() <= 32 &&
+        data.durationSeconds is number && data.durationSeconds >= 0 && data.durationSeconds <= 86400 &&
+        data.disposition is string && data.disposition in [
+          'Resolved First Call', 'Case Created', 'Follow-up Required',
+          'Transferred to Tier 2', 'Identity Verified Only', 'Voicemail Left'
+        ] &&
+        data.publicSummary is string && data.publicSummary.size() >= 3 && data.publicSummary.size() <= 500 &&
+        data.encryptedTranscript is string && data.encryptedTranscript.size() >= 10 && data.encryptedTranscript.size() <= 8192 &&
+        data.encryptionAlgorithm is string && data.encryptionAlgorithm == 'AES-256-GCM' &&
+        data.integrityHash is string && data.integrityHash.size() >= 16 && data.integrityHash.size() <= 128 && data.integrityHash.matches('^[a-fA-F0-9]+$') &&
+        data.agentName is string && data.agentName.size() >= 1 && data.agentName.size() <= 100 &&
+        data.createdBy is string && data.createdBy == request.auth.uid && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 && data.createdBy.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+          'action', 'targetType', 'targetId', 'details',
+          'actorName', 'actorRole', 'createdBy', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'action', 'targetType', 'targetId', 'details',
+          'actorName', 'actorRole', 'createdBy', 'createdAt'
+        ]) &&
+        data.action is string && data.action in [
+          'PROFILE_CREATED', 'PROFILE_UPDATED', 'VAULT_DECRYPTED',
+          'CASE_OPENED', 'CASE_STATUS_CHANGED', 'INTERACTION_ENCRYPTED',
+          'ROLE_UPDATED', 'CTI_CALL_COMPLETED'
+        ] &&
+        data.targetType is string && data.targetType in ['Customer', 'Case', 'Interaction', 'User', 'System'] &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 && data.targetId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.details is string && data.details.size() >= 3 && data.details.size() <= 500 &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100 &&
+        data.actorRole is string && data.actorRole in ['admin', 'supervisor', 'agent'] &&
+        data.createdBy is string && data.createdBy == request.auth.uid && data.createdBy.size() >= 1 && data.createdBy.size() <= 128 && data.createdBy.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp;
+    }
+
+    // =========================================================================
+    // 3. COLLECTION RULES
+    // =========================================================================
+
+    match /test/connection {
+      allow get: if isSignedIn();
+      allow list, write: if false;
+    }
+
+    // Operator Profiles (/users/{userId}) - Strictly isolated PII
+    match /users/{userId} {
+      allow get: if isVerifiedUser() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          (request.auth.uid == userId && incoming().role == 'agent') ||
+          isAdmin()
+        );
+
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Operator updates own CTI station availability & profile display
+          (
+            request.auth.uid == userId &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'extension', 'agentStatus', 'teamQueue', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Administrator updates role or station assignment
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'role', 'extension', 'agentStatus', 'teamQueue', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(userId) && isAdmin();
+    }
+
+    // Trusted Admin Registry (/admins/{adminId})
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(adminId) &&
+        isValidAdminRecord(incoming()) &&
+        incoming().uid == adminId &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(adminId) && isAdmin();
+    }
+
+    // Customer Profiles with Encrypted Vault (/customers/{customerId})
+    match /customers/{customerId} {
+      allow get: if isVerifiedUser() && isValidId(customerId) && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(customerId) &&
+        isValidCustomerProfile(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser() &&
+        isValidId(customerId) &&
+        isValidCustomerProfile(incoming()) &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().accountNumber == existing().accountNumber &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Owner updates contact profile, verification status, or re-encrypted vault
+          (
+            existing().createdBy == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'fullName', 'company', 'phone', 'email', 'tier',
+              'verificationStatus', 'region', 'encryptedVaultPayload',
+              'integrityHash', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Administrator updates customer profile with strict key allowlist
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'fullName', 'company', 'phone', 'email', 'tier',
+              'verificationStatus', 'region', 'encryptedVaultPayload',
+              'integrityHash', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(customerId) && isAdmin();
+    }
+
+    // Customer Service Cases (/cases/{caseId})
+    match /cases/{caseId} {
+      allow get: if isVerifiedUser() && isValidId(caseId) && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(caseId) &&
+        isValidServiceCase(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/customers/$(incoming().customerId));
+
+      allow update: if isVerifiedUser() &&
+        isValidId(caseId) &&
+        isValidServiceCase(incoming()) &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().caseNumber == existing().caseNumber &&
+        incoming().customerId == existing().customerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (existing().status != 'Closed' || isAdmin()) &&
+        (
+          // Action 1: Owner updates case status, priority, description, or encrypted notes
+          (
+            existing().createdBy == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'subject', 'category', 'priority', 'status', 'slaTargetHours',
+              'description', 'encryptedCaseNotes', 'assignedAgentName', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Administrator updates case with strict key allowlist
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'subject', 'category', 'priority', 'status', 'slaTargetHours',
+              'description', 'encryptedCaseNotes', 'assignedAgentName', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(caseId) && isAdmin();
+    }
+
+    // Encrypted Call & Customer Service Interaction Logs (/interactions/{interactionId})
+    match /interactions/{interactionId} {
+      allow get: if isVerifiedUser() && isValidId(interactionId) && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(interactionId) &&
+        isValidInteractionLog(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/customers/$(incoming().customerId));
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(interactionId) && isAdmin();
+    }
+
+    // Immutable Compliance & Security Audit Trail (/auditLogs/{logId})
+    match /auditLogs/{logId} {
+      allow get: if isVerifiedUser() && isValidId(logId) && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(logId) &&
+        isValidAuditLog(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+  }
+}

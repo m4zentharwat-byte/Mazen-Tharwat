@@ -1,0 +1,6 @@
+{
+  "name": "Instacart Care CX — Logistics & Contact Center Suite",
+  "description": "Cisco Finesse-inspired customer service and CTI call center workspace for Instacart logistics, with customer profiles, linked case tracking, offline transfers, agent notebooks, knowledge base, QA & survey dashboard, and AES-256-GCM encrypted storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
