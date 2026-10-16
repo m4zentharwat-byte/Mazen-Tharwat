@@ -564,7 +564,7 @@ export async function seedEnterpriseCallCenterData(
       targetType: 'System',
       targetId: `cust_${safeUid}_01`,
       details:
-        'Provisioned Instacart Care CX logistics workspace: customer profiles, cases, knowledge base SOPs, offline transfers, agent notebooks, and QA survey scorecard.',
+        'Provisioned simple&easy logistics workspace: customer profiles, cases, knowledge base SOPs, offline transfers, agent notebooks, and QA survey scorecard.',
       actorName: operatorName || 'Mazen Tharwat',
       actorRole: operatorRole,
       createdBy: uid,

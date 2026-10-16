@@ -45,6 +45,9 @@ import {
   Sparkles,
   Truck,
   Star,
+  ShieldCheck,
+  ArrowLeft,
+  User as UserIcon,
 } from 'lucide-react';
 import {
   auth,
@@ -96,10 +99,12 @@ import { OfflineTransfersView } from './components/OfflineTransfersView';
 import { AgentNotebookView } from './components/AgentNotebookView';
 import { QaDashboardView } from './components/QaDashboardView';
 import { AiAssistantModal } from './components/AiAssistantModal';
+import { OrganizedWorkspaceView } from './components/OrganizedWorkspaceView';
 import { DIRTY_DOZEN_VERIFICATION_SUITE } from '../firestore.rules.test';
 
-const SUPERVISOR_AVATAR = '/src/assets/images/avatar_senior_supervisor_1790539377306.jpg';
-const AGENT_AVATAR = '/src/assets/images/avatar_specialist_agent_1790539389067.jpg';
+const MAZEN_THARWAT_AVATAR = '/src/assets/images/mazen_tharwat_photo_1792136975363.jpg';
+const SUPERVISOR_AVATAR = MAZEN_THARWAT_AVATAR;
+const AGENT_AVATAR = MAZEN_THARWAT_AVATAR;
 
 type NavSection =
   | 'workspace'
@@ -140,6 +145,11 @@ export default function App() {
   const [tierFilter, setTierFilter] = useState<'ALL' | CustomerTier>('ALL');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'ALL' | CaseStatus>('ALL');
   const [caseKbTab, setCaseKbTab] = useState<'recommended' | 'favorites'>('recommended');
+
+  // Account Search & Review State (for workspace hiding and lookup)
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [accountSearchCriteria, setAccountSearchCriteria] = useState<'all' | 'phone' | 'account' | 'name'>('all');
+  const [activeAccountTab, setActiveAccountTab] = useState<'cases' | 'profile' | 'interactions' | 'security'>('cases');
 
   // Firestore Collections
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
@@ -336,7 +346,7 @@ export default function App() {
         list.sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
         setCustomers(list);
         setSelectedCustomerId((prev) =>
-          prev && list.some((c) => c.id === prev) ? prev : list[0]?.id || null
+          prev && list.some((c) => c.id === prev) ? prev : null
         );
         setDataLoading(false);
       },
@@ -561,7 +571,7 @@ export default function App() {
 
   // Selected Entities
   const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === selectedCustomerId) || customers[0] || null,
+    () => (selectedCustomerId ? customers.find((c) => c.id === selectedCustomerId) || null : null),
     [customers, selectedCustomerId]
   );
 
@@ -575,10 +585,10 @@ export default function App() {
 
   const selectedCase = useMemo(
     () =>
-      customerCases.find((c) => c.id === selectedCaseId) ||
-      customerCases[0] ||
-      null,
-    [customerCases, selectedCaseId]
+      selectedCustomer
+        ? customerCases.find((c) => c.id === selectedCaseId) || customerCases[0] || null
+        : null,
+    [customerCases, selectedCaseId, selectedCustomer]
   );
 
   const customerInteractions = useMemo(
@@ -638,6 +648,42 @@ export default function App() {
     );
   }, [cases, caseStatusFilter]);
 
+  // High-performance account lookup for Workspace
+  const searchedAccounts = useMemo(() => {
+    const q = accountSearchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return customers.filter((c) => {
+      if (accountSearchCriteria === 'phone') {
+        return c.phone.toLowerCase().replace(/[^0-9]/g, '').includes(q.replace(/[^0-9]/g, ''));
+      }
+      if (accountSearchCriteria === 'account') {
+        return c.accountNumber.toLowerCase().includes(q);
+      }
+      if (accountSearchCriteria === 'name') {
+        return c.fullName.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+      }
+      return (
+        c.fullName.toLowerCase().includes(q) ||
+        c.accountNumber.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.company.toLowerCase().includes(q)
+      );
+    });
+  }, [customers, accountSearchQuery, accountSearchCriteria]);
+
+  const handleOpenAccount = (customer: CustomerProfile) => {
+    setSelectedCustomerId(customer.id);
+    const firstCase = cases.find((c) => c.customerId === customer.id);
+    setSelectedCaseId(firstCase?.id || null);
+    setActiveAccountTab('cases');
+  };
+
+  const handleCloseAccount = () => {
+    setSelectedCustomerId(null);
+    setSelectedCaseId(null);
+  };
+
   // Handlers: Auth
   const handleGoogleSignIn = async () => {
     setAuthError(null);
@@ -692,6 +738,9 @@ export default function App() {
     if (matched) {
       setActiveCallCustomer(matched);
       setSelectedCustomerId(matched.id);
+      const firstCase = cases.find((c) => c.customerId === matched.id);
+      setSelectedCaseId(firstCase?.id || null);
+      setActiveAccountTab('cases');
       setDialNumber(matched.phone);
     }
     playCallEventTone('connect');
@@ -713,6 +762,9 @@ export default function App() {
   const handleAnswerInboundCall = () => {
     if (activeCallCustomer) {
       setSelectedCustomerId(activeCallCustomer.id);
+      const firstCase = cases.find((c) => c.customerId === activeCallCustomer.id);
+      setSelectedCaseId(firstCase?.id || null);
+      setActiveAccountTab('cases');
       setActiveNav('workspace');
     }
     setCallDuration(0);
@@ -1431,7 +1483,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
         <div className="flex items-center gap-3 text-sm text-slate-300 font-mono">
           <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-          <span>Initializing Instacart Care CX Logistics & Cryptographic CTI Subsystem...</span>
+          <span>Initializing simple&easy Logistics & Cryptographic CTI Subsystem...</span>
         </div>
       </div>
     );
@@ -1446,8 +1498,9 @@ export default function App() {
               <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center text-white font-bold text-sm tracking-wider">
                 🥕
               </div>
-              <a href="#top" className="text-lg font-bold tracking-tight text-white">
-                Instacart Care CX
+              <a href="#top" className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                <span className="bg-emerald-600 text-white font-mono font-black text-xs px-2 py-0.5 rounded tracking-normal">SE</span>
+                <span>simple&easy</span>
               </a>
             </div>
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
@@ -1473,7 +1526,7 @@ export default function App() {
               <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
                 <span>Created by Mazen Tharwat</span>
                 <span aria-hidden="true">·</span>
-                <span>Instacart Care Logistics Operations</span>
+                <span>simple&easy Logistics Operations</span>
                 <span aria-hidden="true">·</span>
                 <span>Cisco Finesse CTI Architecture</span>
                 <span aria-hidden="true">·</span>
@@ -1484,11 +1537,11 @@ export default function App() {
                 className="text-3xl sm:text-4xl font-bold tracking-tight text-white leading-tight"
                 style={{ textWrap: 'balance' }}
               >
-                Instacart Care CX — Contact Center, Cold-Chain Logistics & SLA Case Suite.
+                simple&easy — Contact Center, Cold-Chain Logistics & SLA Case Suite.
               </h1>
 
               <p className="text-base text-slate-300 leading-relaxed max-w-2xl">
-                The full operational desktop for Instacart Care and high-compliance grocery delivery logistics.
+                The full operational desktop for simple&easy and high-compliance grocery delivery logistics.
                 Manage live CTI softphone interactions, verified customer & shopper profiles, cold-chain SLA claims,
                 asynchronous offline queue dispatch, knowledge base resolution SOPs, agent notebooks, and QA survey scorecards.
               </p>
@@ -1543,7 +1596,7 @@ export default function App() {
               <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                 <div>
                   <h2 className="text-sm font-semibold text-white">
-                    Instacart Fleet & Retail Integration Hub
+                    simple&easy Fleet & Retail Integration Hub
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Connected to Safeway, Costco Wholesale, ALDI & Kroger
@@ -1556,49 +1609,40 @@ export default function App() {
 
               <div className="space-y-4">
                 <div className="flex items-center gap-3.5 pb-4 border-b border-slate-800/80">
-                  {!supAvatarErr ? (
-                    <img
-                      src={SUPERVISOR_AVATAR}
-                      alt="Operations Director Portrait"
-                      referrerPolicy="no-referrer"
-                      onError={() => setSupAvatarErr(true)}
-                      className="w-11 h-11 rounded object-cover border border-slate-700 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
-                      OD
-                    </div>
-                  )}
+                  <img
+                    src={MAZEN_THARWAT_AVATAR}
+                    alt="Mazen Tharwat"
+                    referrerPolicy="no-referrer"
+                    onError={() => setSupAvatarErr(true)}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
+                  />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-white truncate">
-                      Fleet Operations & QA Supervisor Desk
+                    <div className="text-sm font-semibold text-white truncate flex items-center gap-2">
+                      <span>Mazen Tharwat</span>
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-900 text-emerald-300 font-mono text-[10px] font-bold">
+                        LEAD
+                      </span>
                     </div>
                     <div className="text-xs text-slate-400">
-                      Ext. 4010 · Tier-2 Route Unassign & Dispute Bridge
+                      Platform Architect & Operations Lead
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3.5">
-                  {!agentAvatarErr ? (
-                    <img
-                      src={AGENT_AVATAR}
-                      alt="Customer Service Specialist Portrait"
-                      referrerPolicy="no-referrer"
-                      onError={() => setAgentAvatarErr(true)}
-                      className="w-11 h-11 rounded object-cover border border-slate-700 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
-                      CS
-                    </div>
-                  )}
+                  <img
+                    src={MAZEN_THARWAT_AVATAR}
+                    alt="Mazen Tharwat"
+                    referrerPolicy="no-referrer"
+                    onError={() => setAgentAvatarErr(true)}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shrink-0 shadow-sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-white truncate">
-                      Instacart Care Tier-1/Tier-2 Specialist
+                      simple&easy CTI Specialist Workstation
                     </div>
                     <div className="text-xs text-slate-400">
-                      Ext. 4082 · Screen-Pop, SOP Knowledge & Scratchpad
+                      Ext. 4082 · Screen-Pop, SOP Knowledge & Encrypted Vault
                     </div>
                   </div>
                 </div>
@@ -1620,7 +1664,7 @@ export default function App() {
         <footer className="border-t border-slate-900 py-4 px-6 text-xs text-slate-500">
           <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
             <span>
-              Instacart Care CX Enterprise Logistics Suite · Created by{' '}
+              simple&easy Enterprise Logistics Suite · Created by{' '}
               <strong className="text-slate-300 font-semibold">Mazen Tharwat</strong>
             </span>
             <span>GDPR · HIPAA · PCI-DSS v4.0 Field-Level Encryption</span>
@@ -1657,9 +1701,10 @@ export default function App() {
                 e.preventDefault();
                 setActiveNav('workspace');
               }}
-              className="text-lg font-bold tracking-tight text-white whitespace-nowrap"
+              className="text-lg font-bold tracking-tight text-white whitespace-nowrap flex items-center gap-2"
             >
-              Instacart Care CX
+              <span className="bg-emerald-600 text-white font-mono font-black text-xs px-2 py-0.5 rounded tracking-normal">SE</span>
+              <span>simple&easy</span>
             </a>
           </div>
 
@@ -1780,6 +1825,20 @@ export default function App() {
               <Plus className="w-3.5 h-3.5" />
               New Account Profile
             </button>
+            {/* User Profile & Avatar */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+              <img
+                src={MAZEN_THARWAT_AVATAR}
+                alt="Mazen Tharwat"
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-full object-cover border-2 border-emerald-500 shadow-xs"
+              />
+              <div className="hidden sm:block text-left text-[11px] leading-tight">
+                <div className="font-semibold text-white">Mazen Tharwat</div>
+                <div className="text-emerald-400 font-mono text-[9px]">Creator & Operator</div>
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={handleSignOut}
@@ -1827,6 +1886,12 @@ export default function App() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-[1440px] mx-auto px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 text-xs">
           <div className="flex flex-wrap items-center gap-2 text-slate-600">
+            <img
+              src={MAZEN_THARWAT_AVATAR}
+              alt="Mazen Tharwat"
+              referrerPolicy="no-referrer"
+              className="w-5 h-5 rounded-full object-cover border border-emerald-500 inline-block shrink-0"
+            />
             <span className="font-semibold text-slate-900">
               Creator: Mazen Tharwat
             </span>
@@ -1953,640 +2018,41 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* VIEW 1: UNIFIED AGENT WORKSPACE (3-Pane Cisco Finesse Desktop) */}
+            {/* VIEW 1: ORGANIZED AGENT WORKSPACE (Account Hidden Until Explicit Search) */}
             {activeNav === 'workspace' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* PANE 1 (3 cols): Customer Account Queue */}
-                <section className="lg:col-span-3 bg-white border border-slate-200 rounded">
-                  <div className="p-4 border-b border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-sm font-semibold text-slate-900">
-                        Logistics Accounts ({filteredCustomers.length})
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={openCreateCustomerModal}
-                        className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1 whitespace-nowrap"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add
-                      </button>
-                    </div>
-
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={customerSearch}
-                        onChange={(e) => setCustomerSearch(e.target.value)}
-                        placeholder="Search shopper, ACC#, phone..."
-                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-emerald-600"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded">
-                      {(['ALL', 'Enterprise', 'Premier', 'Standard'] as const).map(
-                        (tier) => (
-                          <button
-                            key={tier}
-                            type="button"
-                            onClick={() => setTierFilter(tier)}
-                            className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors whitespace-nowrap ${
-                              tierFilter === tier
-                                ? 'bg-white text-slate-900 shadow-xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            {tier === 'ALL' ? 'All' : tier}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-slate-200 max-h-[640px] overflow-y-auto">
-                    {filteredCustomers.length === 0 ? (
-                      <div className="p-6 text-center space-y-2">
-                        <p className="text-xs text-slate-500">
-                          No customer profiles match the current filter.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={openCreateCustomerModal}
-                          className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded"
-                        >
-                          Create First Account
-                        </button>
-                      </div>
-                    ) : (
-                      filteredCustomers.map((cust) => {
-                        const isSelected = selectedCustomer?.id === cust.id;
-                        const custOpenCases = cases.filter(
-                          (c) =>
-                            c.customerId === cust.id &&
-                            c.status !== 'Resolved' &&
-                            c.status !== 'Closed'
-                        ).length;
-
-                        return (
-                          <div
-                            key={cust.id}
-                            onClick={() => setSelectedCustomerId(cust.id)}
-                            className={`p-3.5 cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-emerald-50/70 border-l-2 border-l-emerald-600'
-                                : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold text-slate-900 truncate">
-                                {cust.fullName}
-                              </span>
-                              <span className="text-xs font-mono text-slate-500 tabular-nums shrink-0">
-                                {cust.accountNumber}
-                              </span>
-                            </div>
-
-                            <div className="text-xs text-slate-600 truncate mt-0.5">
-                              {cust.company}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 mt-2">
-                              <span className="font-mono tabular-nums text-slate-700">
-                                {cust.phone}
-                              </span>
-                              <span aria-hidden="true">·</span>
-                              <span>{cust.tier}</span>
-                              <span aria-hidden="true">·</span>
-                              <span
-                                className={
-                                  cust.verificationStatus === 'Verified'
-                                    ? 'text-emerald-700 font-medium'
-                                    : cust.verificationStatus === 'Flagged'
-                                      ? 'text-red-700 font-medium'
-                                      : 'text-amber-700 font-medium'
-                                }
-                              >
-                                {cust.verificationStatus}
-                              </span>
-                              {custOpenCases > 0 && (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="font-mono tabular-nums text-emerald-800 font-medium">
-                                    {custOpenCases} Case{custOpenCases > 1 ? 's' : ''}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </section>
-
-                {/* PANE 2 (5 cols): Profile & Encrypted Vault + Linked Cases */}
-                <section className="lg:col-span-5 space-y-6">
-                  {selectedCustomer ? (
-                    <>
-                      <div className="bg-white border border-slate-200 rounded p-5 space-y-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-200">
-                          <div>
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                              <span className="font-mono tabular-nums font-semibold text-slate-700">
-                                {selectedCustomer.accountNumber}
-                              </span>
-                              <span aria-hidden="true">·</span>
-                              <span>{selectedCustomer.tier} Tier</span>
-                              <span aria-hidden="true">·</span>
-                              <span>{selectedCustomer.region}</span>
-                            </div>
-                            <h1 className="text-xl font-bold text-slate-900 mt-1">
-                              {selectedCustomer.fullName}
-                            </h1>
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              {selectedCustomer.company} · {selectedCustomer.email} ·{' '}
-                              <span className="font-mono tabular-nums">
-                                {selectedCustomer.phone}
-                              </span>
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleStartOutboundCall(selectedCustomer)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                            >
-                              <Phone className="w-3.5 h-3.5" />
-                              Dial CLI
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditCustomerModal(selectedCustomer)}
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              Edit Profile
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Verification & Compliance Metadata */}
-                        <div className="grid grid-cols-3 gap-4 pb-4 border-b border-slate-200 text-xs">
-                          <div>
-                            <span className="text-slate-500 block">Identity Status</span>
-                            <span
-                              className={`font-semibold mt-0.5 inline-flex items-center gap-1 ${
-                                selectedCustomer.verificationStatus === 'Verified'
-                                  ? 'text-emerald-700'
-                                  : selectedCustomer.verificationStatus === 'Flagged'
-                                    ? 'text-red-600'
-                                    : 'text-amber-700'
-                              }`}
-                            >
-                              {selectedCustomer.verificationStatus === 'Verified' ? (
-                                <UserCheck className="w-3.5 h-3.5" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5" />
-                              )}
-                              {selectedCustomer.verificationStatus}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Vault Cipher</span>
-                            <span className="font-mono font-semibold text-slate-900 mt-0.5 block">
-                              {selectedCustomer.encryptionAlgorithm}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">SHA-256 Digest</span>
-                            <span
-                              className="font-mono text-slate-700 tabular-nums mt-0.5 block truncate"
-                              title={selectedCustomer.integrityHash}
-                            >
-                              {selectedCustomer.integrityHash.slice(0, 14)}...
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Encrypted Customer PII Vault Section */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                              <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Logistics Vault (Client-Side AES-256-GCM Encrypted)</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleToggleVaultLock}
-                              className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
-                            >
-                              {isVaultUnlocked ? 'Lock Vault' : 'Decrypt Vault in Memory'}
-                            </button>
-                          </div>
-
-                          {isVaultUnlocked && currentVault ? (
-                            <div className="bg-slate-50 border border-slate-200 rounded p-3.5 space-y-3 text-xs">
-                              <div className="grid grid-cols-3 gap-3">
-                                <div>
-                                  <span className="text-slate-500 block">Tax / SSN Last-4</span>
-                                  <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                                    •••-••-{currentVault.taxIdLast4}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 block">Security PIN</span>
-                                  <span className="font-mono font-semibold text-emerald-700 tabular-nums">
-                                    {currentVault.securityPin}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 block">Annual Spend / GMV</span>
-                                  <span className="font-mono font-semibold text-slate-900 tabular-nums">
-                                    {currentVault.contractValueUsd}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="pt-2 border-t border-slate-200/80">
-                                <span className="text-slate-500 block">Compliance Guarantee</span>
-                                <span className="text-slate-800 font-medium">
-                                  {currentVault.complianceDirective}
-                                </span>
-                              </div>
-
-                              <div className="pt-2 border-t border-slate-200/80">
-                                <span className="text-slate-500 block">
-                                  Decrypted Delivery & Shopper Notes
-                                </span>
-                                <p className="text-slate-800 leading-relaxed mt-0.5">
-                                  {currentVault.sensitiveNotes}
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-slate-900 text-slate-300 rounded p-3.5 text-xs font-mono space-y-1">
-                              <div className="text-amber-400 font-sans font-medium">
-                                Vault Locked — Plaintext Purged from Memory
-                              </div>
-                              <div className="break-all text-[11px] text-slate-400">
-                                {selectedCustomer.encryptedVaultPayload.slice(0, 160)}...
-                              </div>
-                            </div>
-                          )}
-
-                          {showRawCiphertext && (
-                            <div className="bg-slate-950 text-slate-300 rounded p-3 text-[11px] font-mono space-y-1">
-                              <div className="text-sky-400">
-                                Raw Firestore Cloud Field (encryptedVaultPayload):
-                              </div>
-                              <div className="break-all text-slate-400">
-                                {selectedCustomer.encryptedVaultPayload}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Linked Service Cases */}
-                      <div className="bg-white border border-slate-200 rounded p-5 space-y-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                          <div>
-                            <h2 className="text-sm font-semibold text-slate-900">
-                              Active Cases ({customerCases.length})
-                            </h2>
-                            <p className="text-xs text-slate-500">
-                              Tickets for {selectedCustomer.fullName} ({selectedCustomer.accountNumber})
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={openCreateCaseModal}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                          >
-                            <FolderPlus className="w-3.5 h-3.5" />
-                            Open Case
-                          </button>
-                        </div>
-
-                        {customerCases.length === 0 ? (
-                          <div className="py-6 text-center space-y-2">
-                            <p className="text-xs text-slate-500">
-                              No active cases opened for this logistics account yet.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={openCreateCaseModal}
-                              className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded"
-                            >
-                              Open First Case
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-200">
-                            {customerCases.map((cs) => {
-                              const isActiveCase = selectedCase?.id === cs.id;
-                              return (
-                                <div
-                                  key={cs.id}
-                                  onClick={() => setSelectedCaseId(cs.id)}
-                                  className={`py-3 px-3 -mx-3 rounded cursor-pointer transition-colors ${
-                                    isActiveCase ? 'bg-emerald-50/80' : 'hover:bg-slate-50'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs font-mono font-semibold text-slate-900 tabular-nums">
-                                      {cs.caseNumber}
-                                    </span>
-                                    <div className="flex items-center gap-1.5 text-xs">
-                                      <span
-                                        className={`font-semibold ${
-                                          cs.priority === 'Critical'
-                                            ? 'text-red-600'
-                                            : cs.priority === 'High'
-                                              ? 'text-amber-600'
-                                              : 'text-slate-600'
-                                        }`}
-                                      >
-                                        {cs.priority}
-                                      </span>
-                                      <span aria-hidden="true">·</span>
-                                      <span
-                                        className={`font-medium ${
-                                          cs.status === 'Resolved' || cs.status === 'Closed'
-                                            ? 'text-emerald-700'
-                                            : cs.status === 'Escalated'
-                                              ? 'text-red-600'
-                                              : 'text-sky-700'
-                                        }`}
-                                      >
-                                        {cs.status}
-                                      </span>
-                                      <span aria-hidden="true">·</span>
-                                      <span className="font-mono tabular-nums text-slate-500">
-                                        SLA {cs.slaTargetHours}h
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="text-sm font-medium text-slate-900 mt-1">
-                                    {cs.subject}
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                                    {cs.category} · Assigned to {cs.assignedAgentName}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="bg-white border border-slate-200 rounded p-8 text-center space-y-3">
-                      <p className="text-sm text-slate-600">
-                        Select an account from the queue or create a new profile.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={openCreateCustomerModal}
-                        className="px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded"
-                      >
-                        Create Account Profile
-                      </button>
-                    </div>
-                  )}
-                </section>
-
-                {/* PANE 3 (4 cols): Case Inspector & Recommended Knowledge Base SOPs */}
-                <section className="lg:col-span-4 space-y-6">
-                  {/* Case Detail & Workflow */}
-                  <div className="bg-white border border-slate-200 rounded p-5 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                      <h2 className="text-sm font-semibold text-slate-900">
-                        Case Workflow & Resolution
-                      </h2>
-                      {selectedCase && (
-                        <span className="text-xs font-mono font-semibold text-slate-700 tabular-nums">
-                          {selectedCase.caseNumber}
-                        </span>
-                      )}
-                    </div>
-
-                    {selectedCase ? (
-                      <div className="space-y-4 text-xs">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">
-                            {selectedCase.subject}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-slate-500 mt-1">
-                            <span>{selectedCase.category}</span>
-                            <span aria-hidden="true">·</span>
-                            <span className="font-semibold text-slate-800">
-                              Priority: {selectedCase.priority}
-                            </span>
-                            <span aria-hidden="true">·</span>
-                            <span className="font-mono tabular-nums">
-                              SLA: {selectedCase.slaTargetHours}h
-                            </span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <span className="text-slate-500 block mb-1">Issue Description</span>
-                          <p className="text-slate-800 leading-relaxed bg-slate-50 p-3 rounded border border-slate-200">
-                            {selectedCase.description}
-                          </p>
-                        </div>
-
-                        <div>
-                          <span className="text-slate-500 block mb-1">
-                            AES-256-GCM Encrypted Diagnostic Notes
-                          </span>
-                          <div className="bg-slate-50 p-3 rounded border border-slate-200 text-slate-800 leading-relaxed font-mono text-[11px]">
-                            {isVaultUnlocked
-                              ? decryptedCaseNotesMap[selectedCase.id] || 'Decrypting...'
-                              : '[Locked — Enable Vault Decryption to view internal notes]'}
-                          </div>
-                        </div>
-
-                        {/* Status Transition Buttons & Dispatch to Offline */}
-                        <div className="pt-2 border-t border-slate-200 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-500 font-medium">State Transition</span>
-                            <span className="font-semibold text-slate-900">
-                              Current: {selectedCase.status}
-                            </span>
-                          </div>
-
-                          {selectedCase.status === 'Closed' && operatorProfile?.role !== 'admin' ? (
-                            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 flex items-center gap-2">
-                              <Lock className="w-3.5 h-3.5 shrink-0" />
-                              <span>Terminal State Locked: Closed cases require Administrator access.</span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {(
-                                [
-                                  'Open',
-                                  'In Progress',
-                                  'Pending Customer',
-                                  'Escalated',
-                                  'Resolved',
-                                  'Closed',
-                                ] as CaseStatus[]
-                              ).map((st) => (
-                                <button
-                                  key={st}
-                                  type="button"
-                                  onClick={() => handleUpdateCaseStatus(selectedCase, st)}
-                                  className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors whitespace-nowrap ${
-                                    selectedCase.status === st
-                                      ? 'bg-slate-900 text-white border-slate-900'
-                                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                  }`}
-                                >
-                                  {st}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="pt-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveNav('transfers');
-                              }}
-                              className="w-full py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
-                            >
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                              Dispatch this Case to Offline Fleet Queue
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="py-6 text-center text-xs text-slate-500">
-                        Select a case to inspect SLA metrics and diagnostic notes.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Recommended & Favorite Knowledge Base SOPs Linked to this Case */}
-                  <div className="bg-white border border-slate-200 rounded p-5 space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-900 text-sm">
-                          <Sparkles className="w-4 h-4 text-emerald-600" />
-                          <span>Case SOPs & Knowledge</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowAiModal(true)}
-                          className="px-2.5 py-1 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded transition-colors inline-flex items-center gap-1 shadow-xs"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                          Ask AI
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveNav('knowledge')}
-                          className="text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-                        >
-                          All SOPs →
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Dual Sub-Tabs: Recommended vs Favorites */}
-                    <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
-                      <button
-                        type="button"
-                        onClick={() => setCaseKbTab('recommended')}
-                        className={`px-2.5 py-1 text-xs font-medium rounded transition-colors inline-flex items-center gap-1.5 ${
-                          caseKbTab === 'recommended'
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                        Recommended ({recommendedArticles.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCaseKbTab('favorites')}
-                        className={`px-2.5 py-1 text-xs font-medium rounded transition-colors inline-flex items-center gap-1.5 ${
-                          caseKbTab === 'favorites'
-                            ? 'bg-amber-50 text-amber-900 border border-amber-200 font-semibold'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                        Favorite Articles ({favoriteArticles.length})
-                      </button>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {(caseKbTab === 'recommended' ? recommendedArticles : favoriteArticles).map(
-                        (art) => (
-                          <div
-                            key={art.id}
-                            className="p-3 bg-slate-50 border border-slate-200 rounded space-y-1.5 text-xs transition-colors hover:border-slate-300"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-[11px] font-semibold text-emerald-700">
-                                  {art.articleId}
-                                </span>
-                                <span className="text-[10px] text-slate-500">{art.category}</span>
-                              </div>
-                              <button
-                                type="button"
-                                title={art.isFavorite ? 'Remove from favorites' : 'Mark as case favorite'}
-                                onClick={() => handleToggleFavoriteArticle(art)}
-                                className="p-1 hover:bg-slate-200 rounded transition-colors text-slate-400 hover:text-amber-500"
-                              >
-                                <Star
-                                  className={`w-3.5 h-3.5 ${
-                                    art.isFavorite
-                                      ? 'text-amber-500 fill-amber-500'
-                                      : 'text-slate-400'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-                            <div className="font-semibold text-slate-900">{art.title}</div>
-                            <p className="text-slate-600 text-[11px] line-clamp-2">{art.summary}</p>
-                            <div className="pt-1 flex items-center justify-between">
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {art.isFavorite ? '⭐ Pinned to Case Favorites' : 'Contextual Match'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleApplySopToActiveCase(art.recommendedSop)}
-                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-semibold inline-flex items-center gap-1 transition-colors"
-                              >
-                                Apply SOP to Case
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      )}
-
-                      {caseKbTab === 'favorites' && favoriteArticles.length === 0 && (
-                        <div className="p-4 text-center bg-slate-50 border border-dashed border-slate-200 rounded text-xs text-slate-500 space-y-1">
-                          <div>No favorite articles saved yet.</div>
-                          <p className="text-[11px] text-slate-400">
-                            Click the star on any recommended SOP or visit the Knowledge Base to pin quick solutions.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              </div>
+              <OrganizedWorkspaceView
+                customers={customers}
+                cases={cases}
+                interactions={interactions}
+                articles={articles}
+                selectedCustomer={selectedCustomer}
+                selectedCase={selectedCase}
+                isVaultUnlocked={isVaultUnlocked}
+                showRawCiphertext={showRawCiphertext}
+                currentVault={currentVault}
+                decryptedCaseNotesMap={decryptedCaseNotesMap}
+                operatorProfile={operatorProfile}
+                openCasesCount={openCasesCount}
+                criticalCasesCount={criticalCasesCount}
+                accountSearchQuery={accountSearchQuery}
+                accountSearchCriteria={accountSearchCriteria}
+                activeAccountTab={activeAccountTab}
+                searchedAccounts={searchedAccounts}
+                onSearchQueryChange={setAccountSearchQuery}
+                onSearchCriteriaChange={setAccountSearchCriteria}
+                onAccountTabChange={setActiveAccountTab}
+                onOpenAccount={handleOpenAccount}
+                onCloseAccount={handleCloseAccount}
+                onSelectCase={(caseId) => setSelectedCaseId(caseId)}
+                onOpenCreateCustomerModal={openCreateCustomerModal}
+                onOpenEditCustomerModal={openEditCustomerModal}
+                onOpenCreateCaseModal={openCreateCaseModal}
+                onStartOutboundCall={handleStartOutboundCall}
+                onUpdateCaseStatus={handleUpdateCaseStatus}
+                onToggleVaultLock={handleToggleVaultLock}
+                onApplySopToActiveCase={handleApplySopToActiveCase}
+                onToggleFavoriteArticle={handleToggleFavoriteArticle}
+              />
             )}
 
             {/* VIEW 2: KNOWLEDGE BASE PARTITION */}
@@ -3008,7 +2474,7 @@ export default function App() {
       <footer className="bg-white border-t border-slate-200 py-3.5 px-6 text-xs text-slate-500">
         <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
           <span>
-            Instacart Care CX Logistics & CTI Suite · Created by{' '}
+            simple&easy Logistics & CTI Suite · Created by{' '}
             <strong className="text-slate-900 font-semibold">Mazen Tharwat</strong>
           </span>
           <span>

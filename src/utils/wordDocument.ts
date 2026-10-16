@@ -177,7 +177,7 @@ export async function exportArticleToDocx(article: KnowledgeArticle): Promise<vo
             alignment: AlignmentType.CENTER,
             children: [
               new TextRun({
-                text: 'Instacart Care CX Enterprise System · Compliant with USDA/FDA Food Safety Modernization Act',
+                text: 'simple&easy Enterprise System · Compliant with USDA/FDA Food Safety Modernization Act',
                 size: 16,
                 color: '6B7280',
               }),

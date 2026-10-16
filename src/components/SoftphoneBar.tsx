@@ -213,6 +213,16 @@ export const SoftphoneBar: React.FC<SoftphoneBarProps> = ({
             <span aria-hidden="true">·</span>
             <span className="font-sans text-slate-300">{teamQueue}</span>
           </div>
+
+          <div className="hidden xl:flex items-center gap-1.5 pl-2 border-l border-slate-800">
+            <img
+              src="/src/assets/images/mazen_tharwat_photo_1792136975363.jpg"
+              alt="Mazen Tharwat"
+              referrerPolicy="no-referrer"
+              className="w-5 h-5 rounded-full object-cover border border-emerald-500/70 shrink-0"
+            />
+            <span className="text-xs font-semibold text-slate-200">Mazen Tharwat</span>
+          </div>
         </div>
 
         {/* Center: Active Call / Dialer Bar */}

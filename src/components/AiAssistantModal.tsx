@@ -435,7 +435,7 @@ export const AiAssistantModal: React.FC<AiAssistantModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
           <span>
-            Instacart Care CX Resolution AI · Powered by Gemini 3.8 Flash
+            simple&easy Resolution AI · Powered by Gemini 3.8 Flash
           </span>
           <button
             type="button"

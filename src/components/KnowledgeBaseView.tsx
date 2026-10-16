@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   BookOpen,
   Star,
@@ -24,6 +24,10 @@ import {
   AlertTriangle,
   Send,
   Loader2,
+  Eye,
+  Sliders,
+  CheckCircle2,
+  Maximize2,
 } from 'lucide-react';
 import { KnowledgeArticle, KnowledgeCategory } from '../types';
 import {
@@ -76,10 +80,12 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | KnowledgeCategory>('ALL');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [activeArticle, setActiveArticle] = useState<KnowledgeArticle | null>(null);
-  const [isEditingActiveArticle, setIsEditingActiveArticle] = useState(false);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+  const [activeTabMode, setActiveTabMode] = useState<'view' | 'edit' | 'diagrams'>('view');
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [bannerGalleryOpen, setBannerGalleryOpen] = useState(false);
 
   // New Article Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -99,6 +105,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [editContent, setEditContent] = useState('');
   const [editSop, setEditSop] = useState('');
   const [editBannerUrl, setEditBannerUrl] = useState('');
+  const [editFileName, setEditFileName] = useState('');
+  const [editVersion, setEditVersion] = useState('');
+  const [editClassification, setEditClassification] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // File input refs for uploading .docx
@@ -119,6 +128,35 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
       (art.fileName && art.fileName.toLowerCase().includes(q));
     return matchesCat && matchesFav && matchesSearch;
   });
+
+  // Current active article
+  const currentArticle =
+    articles.find((a) => a.id === selectedArticleId) ||
+    filteredArticles[0] ||
+    articles[0] ||
+    null;
+
+  // Sync edit state whenever currentArticle changes
+  useEffect(() => {
+    if (currentArticle) {
+      setEditTitle(currentArticle.title);
+      setEditSummary(currentArticle.summary);
+      setEditContent(currentArticle.content);
+      setEditSop(currentArticle.recommendedSop);
+      setEditBannerUrl(
+        currentArticle.bannerImage ||
+          LOGISTICS_BANNER_DIAGRAMS[currentArticle.articleId]?.bannerUrl ||
+          ''
+      );
+      setEditFileName(
+        currentArticle.fileName || `${currentArticle.articleId}-Manual.docx`
+      );
+      setEditVersion(currentArticle.docVersion || 'v3.4 Enterprise Logistics Edition');
+      setEditClassification(
+        currentArticle.classification || 'CONFIDENTIAL · INSTACART CARE SOP'
+      );
+    }
+  }, [currentArticle?.id]);
 
   const handleCopySop = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -168,19 +206,16 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
 
   const handleDocxUploadForActive = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeArticle || !onUpdateArticle) return;
+    if (!file || !currentArticle || !onUpdateArticle) return;
     setIsParsingDocx(true);
     try {
       const parsed = await importDocxFile(file);
-      await onUpdateArticle(activeArticle, {
+      await onUpdateArticle(currentArticle, {
         fileName: parsed.fileName,
         content: parsed.rawText.slice(0, 18000),
       });
-      setActiveArticle({
-        ...activeArticle,
-        fileName: parsed.fileName,
-        content: parsed.rawText.slice(0, 18000),
-      });
+      setEditContent(parsed.rawText.slice(0, 18000));
+      setEditFileName(parsed.fileName);
     } catch (err) {
       console.error('Failed to replace article docx:', err);
     } finally {
@@ -196,9 +231,9 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     reader.onload = (event) => {
       const dataUri = event.target?.result as string;
       if (dataUri) {
-        if (activeArticle && onUpdateArticle) {
-          onUpdateArticle(activeArticle, { bannerImage: dataUri });
-          setActiveArticle({ ...activeArticle, bannerImage: dataUri });
+        if (currentArticle && onUpdateArticle) {
+          onUpdateArticle(currentArticle, { bannerImage: dataUri });
+          setEditBannerUrl(dataUri);
         } else {
           setNewBannerUrl(dataUri);
         }
@@ -207,36 +242,29 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleOpenWordManual = (article: KnowledgeArticle) => {
-    setActiveArticle(article);
-    setEditTitle(article.title);
-    setEditSummary(article.summary);
-    setEditContent(article.content);
-    setEditSop(article.recommendedSop);
-    setEditBannerUrl(article.bannerImage || LOGISTICS_BANNER_DIAGRAMS[article.articleId]?.bannerUrl || '');
-    setIsEditingActiveArticle(false);
+  const handleSelectDiagramForActive = async (diagramUrl: string) => {
+    setEditBannerUrl(diagramUrl);
+    if (currentArticle && onUpdateArticle) {
+      await onUpdateArticle(currentArticle, { bannerImage: diagramUrl });
+    }
+    setBannerGalleryOpen(false);
   };
 
   const handleSaveActiveEdit = async () => {
-    if (!activeArticle || !onUpdateArticle) return;
+    if (!currentArticle || !onUpdateArticle) return;
     setIsSavingEdit(true);
     try {
-      await onUpdateArticle(activeArticle, {
+      await onUpdateArticle(currentArticle, {
         title: editTitle.trim(),
         summary: editSummary.trim(),
         content: editContent.trim(),
         recommendedSop: editSop.trim(),
         bannerImage: editBannerUrl.trim(),
+        fileName: editFileName.trim() || `${currentArticle.articleId}-Manual.docx`,
+        docVersion: editVersion.trim(),
+        classification: editClassification.trim(),
       });
-      setActiveArticle({
-        ...activeArticle,
-        title: editTitle.trim(),
-        summary: editSummary.trim(),
-        content: editContent.trim(),
-        recommendedSop: editSop.trim(),
-        bannerImage: editBannerUrl.trim(),
-      });
-      setIsEditingActiveArticle(false);
+      setActiveTabMode('view');
     } finally {
       setIsSavingEdit(false);
     }
@@ -278,7 +306,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded">
+    <div className="bg-slate-100 border border-slate-300 rounded shadow-sm overflow-hidden">
       {/* Hidden file inputs for .docx and banner upload */}
       <input
         type="file"
@@ -302,638 +330,803 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
         className="hidden"
       />
 
-      {/* Header bar */}
-      <div className="p-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold mb-1">
-            <BookOpen className="w-4 h-4" />
-            <span>Instacart Care Operations Knowledge Partition · Word Manuals</span>
+      {/* =====================================================================
+          MICROSOFT WORD TOP RIBBON BAR
+          ===================================================================== */}
+      <div className="bg-slate-900 text-white px-5 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-bold font-mono tracking-wide shadow-xs">
+            <FileText className="w-3.5 h-3.5" />
+            <span>WORD (.DOCX)</span>
           </div>
-          <h1 className="text-lg font-bold text-slate-900">
-            Logistics Knowledge Base & Word Document SOPs
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Official Word document (.docx) handbooks with rich infographics, diagrams, temperature matrices, and 1-click downloads.
-          </p>
+          <div>
+            <div className="text-sm font-bold flex items-center gap-2">
+              <span>Instacart Care Operations Knowledge Partition</span>
+              <span className="text-[11px] font-mono text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-600/40">
+                Word Document SOP Station
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-400">
+              Authorized by Platform Creator <strong className="text-slate-200">Mazen Tharwat</strong> · Certified USDA/FDA Food Safety Standards
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Ribbon Actions */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {onOpenAiAssistant && (
             <button
               type="button"
               onClick={onOpenAiAssistant}
-              className="px-3 py-1.5 rounded text-xs font-semibold inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors shadow-xs"
+              className="px-3 py-1.5 rounded font-semibold inline-flex items-center gap-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-500/50 transition-colors shadow-xs"
             >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              AI Resolution Assistant
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>AI Resolution Assistant</span>
             </button>
           )}
 
           <button
             type="button"
-            onClick={() => setOnlyFavorites((prev) => !prev)}
-            className={`px-3 py-1.5 rounded text-xs font-semibold inline-flex items-center gap-1.5 border transition-colors ${
-              onlyFavorites
-                ? 'bg-amber-50 text-amber-800 border-amber-300'
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <Star
-              className={`w-3.5 h-3.5 ${
-                onlyFavorites ? 'fill-amber-500 text-amber-500' : 'text-slate-400'
-              }`}
-            />
-            Favorite SOPs ({articles.filter((a) => a.isFavorite).length})
-          </button>
-
-          <button
-            type="button"
             onClick={() => setShowCreateModal(true)}
-            className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded inline-flex items-center gap-1.5 whitespace-nowrap shadow-xs"
+            className="px-3 py-1.5 rounded font-semibold inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            New Word SOP (.docx)
+            <span>New Word SOP</span>
           </button>
-        </div>
-      </div>
 
-      {/* Category Pills & Search Bar */}
-      <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
           <button
             type="button"
-            onClick={() => setSelectedCategory('ALL')}
-            className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-              selectedCategory === 'ALL'
-                ? 'bg-slate-900 text-white font-semibold'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
+            onClick={() => createFileInputRef.current?.click()}
+            className="px-3 py-1.5 rounded font-medium inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
-            All SOPs ({articles.length})
+            <Upload className="w-3.5 h-3.5 text-sky-400" />
+            <span>Import .docx File</span>
           </button>
-          {CATEGORIES.map((cat) => {
-            const count = articles.filter((a) => a.category === cat).length;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-                  selectedCategory === cat
-                    ? 'bg-emerald-700 text-white font-semibold'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {cat} ({count})
-              </button>
-            );
-          })}
         </div>
-
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search title, word file, SOP or ID..."
-            className="w-full text-xs pl-9 pr-3 py-1.5 rounded border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-          />
-        </div>
-      </div>
-
-      {/* Articles Grid: Styled as Word Document Manuals */}
-      <div className="p-6">
-        {filteredArticles.length === 0 ? (
-          <div className="py-12 text-center space-y-3">
-            <FolderOpen className="w-8 h-8 text-slate-400 mx-auto" />
-            <p className="text-sm text-slate-600">No Word SOP manuals match your query.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('ALL');
-                setOnlyFavorites(false);
-              }}
-              className="text-xs font-semibold text-sky-600 hover:text-sky-700"
-            >
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredArticles.map((art) => {
-              const bannerInfo =
-                LOGISTICS_BANNER_DIAGRAMS[art.articleId] || {
-                  bannerUrl: art.bannerImage || '',
-                  caption: art.summary,
-                  badgeText: 'Instacart SOP Document',
-                };
-              const displayBanner = art.bannerImage || bannerInfo.bannerUrl;
-
-              return (
-                <div
-                  key={art.id}
-                  className="bg-white border border-slate-200 rounded-lg overflow-hidden flex flex-col justify-between hover:border-slate-300 hover:shadow-md transition-all group"
-                >
-                  <div>
-                    {/* Visual Banner Thumbnail */}
-                    <div className="relative h-32 w-full bg-slate-900 overflow-hidden border-b border-slate-200">
-                      {displayBanner ? (
-                        <img
-                          src={displayBanner}
-                          alt={art.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400 text-xs font-mono">
-                          <FileText className="w-6 h-6 mr-1 text-emerald-400" />
-                          <span>Instacart Logistics Manual</span>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/30 pointer-events-none" />
-
-                      {/* Top Badges */}
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-600 text-white shadow-xs inline-flex items-center gap-1">
-                          <FileText className="w-2.5 h-2.5" />
-                          DOCX
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-900/90 text-emerald-300 border border-emerald-500/30">
-                          {art.articleId}
-                        </span>
-                      </div>
-
-                      <div className="absolute top-2 right-2">
-                        <button
-                          type="button"
-                          onClick={() => onToggleFavorite(art)}
-                          className="p-1 rounded bg-slate-900/80 hover:bg-slate-900 text-slate-300 hover:text-amber-400 transition-colors"
-                          title={art.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                          <Star
-                            className={`w-3.5 h-3.5 ${
-                              art.isFavorite ? 'fill-amber-400 text-amber-400' : 'text-slate-400'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Bottom Banner Title Kicker */}
-                      <div className="absolute bottom-1.5 left-2 right-2 text-[10px] text-slate-300 truncate font-mono">
-                        {art.fileName || `${art.articleId}-Manual.docx`}
-                      </div>
-                    </div>
-
-                    {/* Card Content */}
-                    <div className="p-4 space-y-2">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                        <span className="text-emerald-700 font-semibold">{art.category}</span>
-                        <span>{art.docVersion || 'v3.4 Edition'}</span>
-                      </div>
-
-                      <h3 className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">
-                        {art.title}
-                      </h3>
-
-                      <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                        {art.summary}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card Actions */}
-                  <div className="p-4 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs bg-slate-50/50">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenWordManual(art)}
-                      className="px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded font-semibold inline-flex items-center gap-1 transition-colors"
-                    >
-                      <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                      Open Word Manual
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadDocx(art)}
-                        disabled={downloadingId === art.id}
-                        title="Download as genuine Microsoft Word (.docx)"
-                        className="p-1.5 text-slate-700 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded transition-colors inline-flex items-center"
-                      >
-                        {downloadingId === art.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                        ) : (
-                          <Download className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleCopySop(art.recommendedSop, art.id)}
-                        title="Copy fast resolution SOP snippet"
-                        className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-200 border border-slate-200 rounded transition-colors inline-flex items-center"
-                      >
-                        {copiedId === art.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-slate-500" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* =====================================================================
-          AUTHENTIC FULL-SCREEN WORD DOCUMENT MANUAL VIEWER & EDITOR
+          MAIN TWO-COLUMN WORKSPACE: LEFT NAVIGATOR + RIGHT WORD DOCUMENT
           ===================================================================== */}
-      {activeArticle && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col z-50 overflow-hidden">
-          {/* Word Ribbon Toolbar */}
-          <div className="bg-slate-900 text-white px-6 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3">
-              <span className="px-2 py-0.5 rounded text-xs font-bold font-mono bg-blue-600 text-white flex items-center gap-1 shadow-xs">
-                <FileText className="w-3.5 h-3.5" />
-                DOCX
-              </span>
-              <div>
-                <div className="text-sm font-bold flex items-center gap-2">
-                  <span>{activeArticle.fileName || `${activeArticle.articleId}-Manual.docx`}</span>
-                  <span className="text-[11px] font-normal text-slate-400">
-                    ({activeArticle.docVersion || 'v3.4 Enterprise Edition'})
-                  </span>
-                </div>
-                <div className="text-[11px] text-emerald-400 font-mono">
-                  {activeArticle.articleId} · {activeArticle.category}
-                </div>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[820px]">
+        {/* ===================================================================
+            LEFT COLUMN (3 cols): WORD DOCUMENT EXPLORER & SIBEBAR
+            =================================================================== */}
+        <div className="lg:col-span-4 xl:col-span-3 bg-white border-r border-slate-200 flex flex-col">
+          {/* Search & Filters */}
+          <div className="p-3.5 border-b border-slate-200 space-y-2.5 bg-slate-50/70">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Word files, SOPs, tags..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-600"
+              />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {/* Download DOCX */}
+            {/* Category Filter Dropdown */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value as any)}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-medium text-slate-700"
+            >
+              <option value="ALL">All Categories ({articles.length} Manuals)</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+
+            {/* Favorites Toggle */}
+            <div className="flex items-center justify-between pt-1 text-xs">
               <button
                 type="button"
-                onClick={() => handleDownloadDocx(activeArticle)}
-                disabled={downloadingId === activeArticle.id}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
-              >
-                {downloadingId === activeArticle.id ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Download className="w-3.5 h-3.5" />
-                )}
-                <span>Download Word File (.docx)</span>
-              </button>
-
-              {/* Upload / Replace with DOCX */}
-              {onUpdateArticle && (
-                <button
-                  type="button"
-                  onClick={() => activeFileInputRef.current?.click()}
-                  disabled={isParsingDocx}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded font-medium inline-flex items-center gap-1.5 transition-colors"
-                >
-                  <Upload className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{isParsingDocx ? 'Parsing .docx...' : 'Import from .docx'}</span>
-                </button>
-              )}
-
-              {/* Change Banner Picture */}
-              {onUpdateArticle && (
-                <button
-                  type="button"
-                  onClick={() => bannerImageInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded font-medium inline-flex items-center gap-1.5 transition-colors"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Change Banner Image</span>
-                </button>
-              )}
-
-              {/* Edit Toggle */}
-              {onUpdateArticle && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingActiveArticle((prev) => !prev)}
-                  className={`px-3 py-1.5 rounded font-medium inline-flex items-center gap-1.5 border transition-colors ${
-                    isEditingActiveArticle
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-semibold'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                  }`}
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>{isEditingActiveArticle ? 'Exit Editor' : 'Edit Word Document'}</span>
-                </button>
-              )}
-
-              {/* Print */}
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded inline-flex items-center"
-                title="Print Word Document"
-              >
-                <Printer className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Favorite */}
-              <button
-                type="button"
-                onClick={() => onToggleFavorite(activeArticle)}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700"
+                onClick={() => setOnlyFavorites((prev) => !prev)}
+                className={`px-2.5 py-1 rounded inline-flex items-center gap-1.5 font-medium transition-colors ${
+                  onlyFavorites
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
                 <Star
-                  className={`w-4 h-4 ${
-                    activeArticle.isFavorite ? 'fill-amber-400 text-amber-400' : 'text-slate-400'
+                  className={`w-3.5 h-3.5 ${
+                    onlyFavorites ? 'fill-amber-500 text-amber-500' : 'text-slate-400'
                   }`}
                 />
+                <span>Favorites Only ({articles.filter((a) => a.isFavorite).length})</span>
               </button>
-
-              {/* Close */}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveArticle(null);
-                  setIsEditingActiveArticle(false);
-                }}
-                className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <span className="text-[11px] text-slate-500 font-mono">
+                {filteredArticles.length} files
+              </span>
             </div>
           </div>
 
-          {/* Word Document Canvas Container */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-200/90 flex justify-center">
-            {/* The Word Document Page (A4 / Letter Styling with Drop Shadow) */}
-            <div className="w-full max-w-4xl bg-white shadow-2xl rounded-xs border border-slate-300 p-8 md:p-14 space-y-7 relative font-sans min-h-[950px]">
-              {/* Document Header Kicker & Classification */}
-              <div className="flex flex-wrap items-center justify-between pb-4 border-b-2 border-slate-900 gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-base select-none">🥕</span>
-                  <span className="font-bold tracking-wider text-slate-900 font-mono">
-                    INSTACART CARE CX ENTERPRISE LOGISTICS MANUAL
-                  </span>
+          {/* List of Word Documents */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[750px]">
+            {filteredArticles.length === 0 ? (
+              <div className="p-6 text-center space-y-2">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs text-slate-500">No Word manuals match criteria.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded"
+                >
+                  Create Word Document
+                </button>
+              </div>
+            ) : (
+              filteredArticles.map((art) => {
+                const isSelected = currentArticle?.id === art.id;
+                const bannerInfo = LOGISTICS_BANNER_DIAGRAMS[art.articleId];
+
+                return (
+                  <div
+                    key={art.id}
+                    onClick={() => {
+                      setSelectedArticleId(art.id);
+                      setActiveTabMode('view');
+                    }}
+                    className={`p-3.5 cursor-pointer transition-colors relative ${
+                      isSelected
+                        ? 'bg-blue-50/80 border-l-4 border-l-blue-600'
+                        : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-blue-700 font-bold">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                        <span>{art.articleId}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite(art);
+                        }}
+                        className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-amber-500 transition-colors"
+                        title={art.isFavorite ? 'Unfavorite' : 'Add to Favorites'}
+                      >
+                        <Star
+                          className={`w-3.5 h-3.5 ${
+                            art.isFavorite
+                              ? 'fill-amber-400 text-amber-500'
+                              : 'text-slate-300'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="text-xs font-bold text-slate-900 mt-1 line-clamp-2 leading-snug">
+                      {art.title}
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 line-clamp-2 mt-1">
+                      {art.summary}
+                    </div>
+
+                    {/* Word File Badge & Category */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-100/80 text-blue-800 font-mono font-medium">
+                        {art.fileName || `${art.articleId}.docx`}
+                      </span>
+                      <span className="text-slate-400">·</span>
+                      <span className="text-slate-600 truncate max-w-[130px]">
+                        {art.category}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ===================================================================
+            RIGHT COLUMN (9 cols): THE AUTHENTIC WORD DOCUMENT CANVAS
+            =================================================================== */}
+        <div className="lg:col-span-8 xl:col-span-9 bg-slate-200/90 flex flex-col">
+          {currentArticle ? (
+            <>
+              {/* Document Action Header / Word Document Bar */}
+              <div className="bg-white border-b border-slate-300 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabMode('view')}
+                    className={`px-3 py-1 rounded font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      activeTabMode === 'view'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Word Document View</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabMode('edit')}
+                    className={`px-3 py-1 rounded font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      activeTabMode === 'edit'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Document & Banners</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabMode('diagrams')}
+                    className={`px-3 py-1 rounded font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      activeTabMode === 'diagrams'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Pictures & Diagrams Studio</span>
+                  </button>
                 </div>
-                <div className="font-mono text-[11px] font-bold text-rose-800 px-2 py-0.5 bg-rose-50 border border-rose-200 rounded">
-                  {activeArticle.classification || 'CONFIDENTIAL · INSTACART CARE SOP'}
+
+                {/* Primary Document Actions */}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadDocx(currentArticle)}
+                    disabled={downloadingId === currentArticle.id}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                    title="Export as Microsoft Word (.docx)"
+                  >
+                    {downloadingId === currentArticle.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    <span>Download Word File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => activeFileInputRef.current?.click()}
+                    disabled={isParsingDocx}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-medium inline-flex items-center gap-1 transition-colors"
+                    title="Replace content with an uploaded .docx"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Import .docx</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => bannerImageInputRef.current?.click()}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-medium inline-flex items-center gap-1 transition-colors"
+                    title="Upload picture or banner"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Upload Picture</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopySop(currentArticle.recommendedSop, currentArticle.id)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-medium inline-flex items-center gap-1 transition-colors"
+                  >
+                    {copiedId === currentArticle.id ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy SOP</span>
+                      </>
+                    )}
+                  </button>
+
+                  {onApplySopToActiveCase && (
+                    <button
+                      type="button"
+                      onClick={() => onApplySopToActiveCase(currentArticle.recommendedSop)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Apply to Case</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="p-1.5 text-slate-600 hover:text-slate-900 border border-slate-300 bg-white rounded"
+                    title="Print Word Document"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* In-Line Editing Controls Banner */}
-              {isEditingActiveArticle && (
-                <div className="p-4 bg-amber-50 border border-amber-300 rounded-lg space-y-4 text-xs">
-                  <div className="font-bold text-amber-950 flex items-center justify-between">
-                    <span>Editing Word Document Content</span>
-                    <button
-                      type="button"
-                      onClick={handleSaveActiveEdit}
-                      disabled={isSavingEdit}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold inline-flex items-center gap-1.5 shadow-xs"
-                    >
-                      {isSavingEdit ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                      <span>Save Changes to Word Document</span>
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="font-medium text-slate-700">Document Title</label>
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900"
-                      />
+              {/* Scrollable Container with Word Page */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
+                {/* MODE 1: AUTHENTIC WORD DOCUMENT VIEW */}
+                {activeTabMode === 'view' && (
+                  <div className="w-full max-w-4xl bg-white shadow-2xl rounded-xs border border-slate-300 p-8 md:p-14 space-y-7 relative font-sans min-h-[950px]">
+                    {/* Document Header Kicker & Classification */}
+                    <div className="flex flex-wrap items-center justify-between pb-4 border-b-2 border-slate-900 gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base select-none">🥕</span>
+                        <span className="font-bold tracking-wider text-slate-900 font-mono">
+                          INSTACART CARE CX ENTERPRISE LOGISTICS MANUAL
+                        </span>
+                      </div>
+                      <div className="font-mono text-[11px] font-bold text-rose-800 px-2.5 py-0.5 bg-rose-50 border border-rose-200 rounded">
+                        {currentArticle.classification || 'CONFIDENTIAL · INSTACART CARE SOP'}
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="font-medium text-slate-700">Banner Picture URL</label>
+
+                    {/* Document Title Header */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 font-mono text-xs text-blue-700 font-semibold">
+                        <span>DOCUMENT ID: {currentArticle.articleId}</span>
+                        <span>·</span>
+                        <span>CATEGORY: {currentArticle.category}</span>
+                      </div>
+                      <h1 className="text-2xl md:text-3xl font-extrabold text-slate-950 tracking-tight leading-tight">
+                        {currentArticle.title}
+                      </h1>
+                    </div>
+
+                    {/* High-Resolution Document Visual Banner / Infographic Diagram */}
+                    {(currentArticle.bannerImage ||
+                      LOGISTICS_BANNER_DIAGRAMS[currentArticle.articleId]?.bannerUrl) && (
+                      <div className="space-y-2">
+                        <div className="relative rounded-lg overflow-hidden border border-slate-300 shadow-md max-h-84">
+                          <img
+                            src={
+                              currentArticle.bannerImage ||
+                              LOGISTICS_BANNER_DIAGRAMS[currentArticle.articleId]?.bannerUrl
+                            }
+                            alt={currentArticle.title}
+                            className="w-full h-full object-cover max-h-84"
+                          />
+                          <div className="absolute bottom-0 inset-x-0 bg-slate-950/85 backdrop-blur-xs text-white p-3 text-xs flex flex-wrap items-center justify-between gap-3">
+                            <span className="font-medium text-[11px] leading-snug max-w-2xl">
+                              {LOGISTICS_BANNER_DIAGRAMS[currentArticle.articleId]?.caption ||
+                                'Certified Instacart Logistics SOP Diagram & Flowchart Specification.'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-600 text-white shrink-0">
+                              {LOGISTICS_BANNER_DIAGRAMS[currentArticle.articleId]?.badgeText ||
+                                'Verified Operational SOP'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Formal Document Control Table (Microsoft Word Style) */}
+                    <div className="overflow-x-auto border border-slate-300 rounded text-xs shadow-2xs">
+                      <table className="w-full border-collapse">
+                        <tbody>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <td className="p-2.5 font-bold text-slate-900 w-1/4 border-r border-slate-200">
+                              Document File
+                            </td>
+                            <td className="p-2.5 text-blue-700 font-mono w-1/4 border-r border-slate-200 font-semibold">
+                              {currentArticle.fileName || `${currentArticle.articleId}-Manual.docx`}
+                            </td>
+                            <td className="p-2.5 font-bold text-slate-900 w-1/4 border-r border-slate-200">
+                              Version & Status
+                            </td>
+                            <td className="p-2.5 text-emerald-800 font-semibold w-1/4">
+                              {currentArticle.docVersion || 'v3.4 Enterprise Logistics Edition'} (Active)
+                            </td>
+                          </tr>
+                          <tr className="bg-white">
+                            <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">
+                              Platform Creator
+                            </td>
+                            <td className="p-2.5 text-slate-900 font-bold border-r border-slate-200">
+                              Mazen Tharwat
+                            </td>
+                            <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">
+                              Regulatory Compliance
+                            </td>
+                            <td className="p-2.5 text-slate-700">
+                              FDA / USDA Food Safety & PCI-DSS
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Section 1: Executive Policy Summary Callout */}
+                    <div className="space-y-2">
+                      <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
+                        <span>1. Executive Policy Summary</span>
+                      </h2>
+                      <div className="p-4 bg-sky-50 border-l-4 border-blue-600 rounded-r text-xs text-slate-800 leading-relaxed font-sans shadow-2xs">
+                        <p className="font-semibold text-blue-950 mb-1">Operational Scope & Mandate:</p>
+                        <p>{currentArticle.summary}</p>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Standard Operating Procedure (Step-by-Step) */}
+                    <div className="space-y-3">
+                      <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
+                        <span>2. Operational Procedure & Step-by-Step Checklist</span>
+                      </h2>
+                      <div className="space-y-2.5 text-xs leading-relaxed text-slate-800">
+                        {currentArticle.content
+                          .split('\n')
+                          .filter((line) => line.trim().length > 0)
+                          .map((line, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3.5 bg-slate-50 border border-slate-200 rounded flex items-start gap-3 hover:border-blue-300 transition-colors"
+                            >
+                              <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <div className="flex-1">
+                                <p className="font-medium text-slate-900">{line}</p>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Section 3: Recommended Quick Action Case Snippet */}
+                    <div className="space-y-2 pt-2">
+                      <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
+                        <span>3. Rapid Resolution Snippet for Case Notes</span>
+                      </h2>
+                      <div className="p-4 bg-slate-900 text-slate-100 rounded font-mono text-xs flex flex-wrap items-center justify-between gap-3 shadow-md">
+                        <span className="text-emerald-400 font-semibold max-w-xl">
+                          {currentArticle.recommendedSop}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopySop(currentArticle.recommendedSop, 'active-sop')}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 transition-colors border border-slate-700"
+                          >
+                            {copiedId === 'active-sop' ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" /> Copy Snippet
+                              </>
+                            )}
+                          </button>
+                          {onApplySopToActiveCase && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onApplySopToActiveCase(currentArticle.recommendedSop);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              Apply to Case
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Document Sign-Off & Regulatory Seal Footer */}
+                    <div className="pt-8 border-t-2 border-slate-900 mt-10 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <img
+                            src="/src/assets/images/mazen_tharwat_photo_1792136975363.jpg"
+                            alt="Mazen Tharwat"
+                            referrerPolicy="no-referrer"
+                            className="w-5 h-5 rounded-full object-cover border border-emerald-500 inline-block shrink-0"
+                          />
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          <span>Authorized by Platform Creator: Mazen Tharwat</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          simple&easy Enterprise Operations · USDA/FDA Food Safety Modernization Act Compliant
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] font-mono text-slate-400">
+                        Page 1 of 1 · Microsoft Word Format (.docx)
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MODE 2: WORD DOCUMENT & BANNER EDITOR */}
+                {activeTabMode === 'edit' && (
+                  <div className="w-full max-w-4xl bg-white shadow-xl rounded-lg border border-slate-300 p-8 space-y-6">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                          Edit Microsoft Word Manual & Rich Media
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                          Customize policy guidelines, step checklists, high-definition banners, and Word filenames.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveActiveEdit}
+                        disabled={isSavingEdit}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        {isSavingEdit ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Save Changes to Word Document</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Document Headline / Title</label>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Word File Name (.docx)</label>
+                        <input
+                          type="text"
+                          value={editFileName}
+                          onChange={(e) => setEditFileName(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Document Classification Stamp</label>
+                        <input
+                          type="text"
+                          value={editClassification}
+                          onChange={(e) => setEditClassification(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Document Version</label>
+                        <input
+                          type="text"
+                          value={editVersion}
+                          onChange={(e) => setEditVersion(e.target.value)}
+                          className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Banner Image URL / Picker */}
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <label className="font-semibold text-slate-700">
+                          Banner / Diagram Image URL
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => bannerImageInputRef.current?.click()}
+                            className="text-xs text-blue-700 hover:underline font-semibold"
+                          >
+                            Upload from Computer
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTabMode('diagrams')}
+                            className="text-xs text-emerald-700 hover:underline font-semibold"
+                          >
+                            Browse Built-in Diagram Gallery
+                          </button>
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={editBannerUrl}
                         onChange={(e) => setEditBannerUrl(e.target.value)}
-                        placeholder="https://... or click Change Banner Image button"
-                        className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900"
+                        placeholder="https://images.unsplash.com/... or upload image"
+                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono"
+                      />
+                      {editBannerUrl && (
+                        <div className="relative rounded overflow-hidden border border-slate-200 max-h-48 mt-2">
+                          <img
+                            src={editBannerUrl}
+                            alt="Banner Preview"
+                            className="w-full h-full object-cover max-h-48"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Executive Summary */}
+                    <div className="space-y-1 text-xs">
+                      <label className="font-semibold text-slate-700">1. Executive Policy Summary</label>
+                      <textarea
+                        rows={3}
+                        value={editSummary}
+                        onChange={(e) => setEditSummary(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600"
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-1">
-                    <label className="font-medium text-slate-700">Executive Policy Summary</label>
-                    <textarea
-                      rows={2}
-                      value={editSummary}
-                      onChange={(e) => setEditSummary(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-medium text-slate-700">
-                      Standard Operating Procedure Steps (Word Body Text)
-                    </label>
-                    <textarea
-                      rows={6}
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900 font-mono text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-medium text-slate-700">
-                      Recommended Case Note Entry
-                    </label>
-                    <input
-                      type="text"
-                      value={editSop}
-                      onChange={(e) => setEditSop(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded bg-white text-slate-900"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Document Title Header */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-mono text-xs text-emerald-700 font-semibold">
-                  <span>DOCUMENT ID: {activeArticle.articleId}</span>
-                  <span>·</span>
-                  <span>CATEGORY: {activeArticle.category}</span>
-                </div>
-                <h1 className="text-2xl md:text-3xl font-extrabold text-slate-950 tracking-tight leading-tight">
-                  {activeArticle.title}
-                </h1>
-              </div>
-
-              {/* Large Document Visual Banner / Infographic Diagram */}
-              {(activeArticle.bannerImage ||
-                LOGISTICS_BANNER_DIAGRAMS[activeArticle.articleId]?.bannerUrl) && (
-                <div className="space-y-2">
-                  <div className="relative rounded-lg overflow-hidden border border-slate-300 shadow-md max-h-80">
-                    <img
-                      src={
-                        activeArticle.bannerImage ||
-                        LOGISTICS_BANNER_DIAGRAMS[activeArticle.articleId]?.bannerUrl
-                      }
-                      alt={activeArticle.title}
-                      className="w-full h-full object-cover max-h-80"
-                    />
-                    <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 backdrop-blur-xs text-white p-2.5 text-xs flex items-center justify-between gap-3">
-                      <span className="font-medium text-[11px] leading-snug">
-                        {LOGISTICS_BANNER_DIAGRAMS[activeArticle.articleId]?.caption ||
-                          'Certified Instacart Logistics SOP Diagram & Process Illustration.'}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-600 text-white shrink-0">
-                        {LOGISTICS_BANNER_DIAGRAMS[activeArticle.articleId]?.badgeText ||
-                          'Verified Operational SOP'}
-                      </span>
+                    {/* SOP Content Steps */}
+                    <div className="space-y-1 text-xs">
+                      <label className="font-semibold text-slate-700">
+                        2. Standard Operating Procedure (Numbered steps, 1 per line)
+                      </label>
+                      <textarea
+                        rows={7}
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono"
+                      />
                     </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Document Control Table (Formal Word Style) */}
-              <div className="overflow-x-auto border border-slate-300 rounded text-xs">
-                <table className="w-full border-collapse">
-                  <tbody>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <td className="p-2.5 font-bold text-slate-900 w-1/4 border-r border-slate-200">
-                        Document File
-                      </td>
-                      <td className="p-2.5 text-slate-700 font-mono w-1/4 border-r border-slate-200">
-                        {activeArticle.fileName || `${activeArticle.articleId}-Manual.docx`}
-                      </td>
-                      <td className="p-2.5 font-bold text-slate-900 w-1/4 border-r border-slate-200">
-                        Version & Status
-                      </td>
-                      <td className="p-2.5 text-emerald-800 font-semibold w-1/4">
-                        {activeArticle.docVersion || 'v3.4 Edition'} (Active)
-                      </td>
-                    </tr>
-                    <tr className="bg-white">
-                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">
-                        Platform Creator
-                      </td>
-                      <td className="p-2.5 text-slate-800 font-semibold border-r border-slate-200">
-                        Mazen Tharwat
-                      </td>
-                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200">
-                        Regulatory Compliance
-                      </td>
-                      <td className="p-2.5 text-slate-700">
-                        FDA / USDA Food Safety & PCI-DSS
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                    {/* Fast Case Note Snippet */}
+                    <div className="space-y-1 text-xs">
+                      <label className="font-semibold text-slate-700">
+                        3. Fast Resolution Case Note Snippet
+                      </label>
+                      <input
+                        type="text"
+                        value={editSop}
+                        onChange={(e) => setEditSop(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-emerald-800"
+                      />
+                    </div>
 
-              {/* Section 1: Executive Summary Callout */}
-              <div className="space-y-2">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
-                  <span>1. Executive Policy Summary</span>
-                </h2>
-                <div className="p-4 bg-sky-50 border-l-4 border-sky-600 rounded-r text-xs text-slate-800 leading-relaxed font-sans shadow-2xs">
-                  <p className="font-semibold text-sky-950 mb-1">Scope & Mandate:</p>
-                  <p>{activeArticle.summary}</p>
-                </div>
-              </div>
-
-              {/* Section 2: Standard Operating Procedure (Step-by-Step) */}
-              <div className="space-y-3">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
-                  <span>2. Operational Procedure & Compliance Checklist</span>
-                </h2>
-                <div className="space-y-2 text-xs leading-relaxed text-slate-800">
-                  {activeArticle.content
-                    .split('\n')
-                    .filter((line) => line.trim().length > 0)
-                    .map((line, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-slate-50 border border-slate-200 rounded flex items-start gap-3 hover:border-slate-300 transition-colors"
-                      >
-                        <span className="w-5 h-5 rounded-full bg-slate-900 text-white font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <div className="flex-1">
-                          <p className="font-medium text-slate-900">{line}</p>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* Section 3: Recommended Quick Action Case Snippet */}
-              <div className="space-y-2 pt-2">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-1">
-                  <span>3. Rapid Resolution Snippet for Case Notes</span>
-                </h2>
-                <div className="p-4 bg-slate-900 text-slate-100 rounded font-mono text-xs flex flex-wrap items-center justify-between gap-3 shadow-md">
-                  <span className="text-emerald-400 font-semibold">
-                    {activeArticle.recommendedSop}
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleCopySop(activeArticle.recommendedSop, 'active-sop')}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 transition-colors border border-slate-700"
-                    >
-                      {copiedId === 'active-sop' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" /> Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" /> Copy Snippet
-                        </>
-                      )}
-                    </button>
-                    {onApplySopToActiveCase && (
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
                       <button
                         type="button"
-                        onClick={() => {
-                          onApplySopToActiveCase(activeArticle.recommendedSop);
-                        }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shadow-xs"
+                        onClick={() => setActiveTabMode('view')}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold"
                       >
-                        <Send className="w-3.5 h-3.5" />
-                        Apply to Case
+                        Cancel
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={handleSaveActiveEdit}
+                        disabled={isSavingEdit}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        {isSavingEdit ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Save Changes to Word Document</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* Document Sign-Off & Regulatory Seal Footer */}
-              <div className="pt-8 border-t-2 border-slate-900 mt-10 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Authorized by Platform Creator: Mazen Tharwat</span>
+                {/* MODE 3: PICTURES & DIAGRAMS STUDIO */}
+                {activeTabMode === 'diagrams' && (
+                  <div className="w-full max-w-4xl bg-white shadow-xl rounded-lg border border-slate-300 p-8 space-y-6">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-900">
+                          Logistics Infographics & Banner Diagram Studio
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                          Select high-definition process diagrams for cold chains, fleet dispatch, damage restitution, and curbside handovers.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => bannerImageInputRef.current?.click()}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Custom Diagram</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {Object.entries(LOGISTICS_BANNER_DIAGRAMS).map(([sopKey, item]) => {
+                        const isCurrentlyApplied = editBannerUrl === item.bannerUrl;
+
+                        return (
+                          <div
+                            key={sopKey}
+                            className={`border rounded-lg overflow-hidden flex flex-col justify-between transition-all ${
+                              isCurrentlyApplied
+                                ? 'border-emerald-600 ring-2 ring-emerald-500/30 bg-emerald-50/20'
+                                : 'border-slate-300 hover:border-slate-400 bg-white'
+                            }`}
+                          >
+                            <div className="relative h-44 overflow-hidden bg-slate-900">
+                              <img
+                                src={item.bannerUrl}
+                                alt={item.caption}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-900/90 text-white">
+                                {sopKey}
+                              </div>
+                              <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-600 text-white">
+                                {item.badgeText}
+                              </div>
+                            </div>
+
+                            <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                              <p className="text-xs text-slate-700 leading-snug">
+                                {item.caption}
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSelectDiagramForActive(item.bannerUrl)}
+                                className={`w-full py-1.5 px-3 rounded text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
+                                  isCurrentlyApplied
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                }`}
+                              >
+                                {isCurrentlyApplied ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Currently Applied Banner</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                    <span>Apply This Diagram to Document</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    Instacart Care CX Enterprise Operations · All Rights Reserved
-                  </div>
-                </div>
-                <div className="text-right text-[11px] font-mono text-slate-400">
-                  Page 1 of 1 · Certified Word Document Manual
-                </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8 text-center">
+              <div className="max-w-md space-y-3">
+                <FileText className="w-12 h-12 text-slate-300 mx-auto" />
+                <h3 className="text-base font-bold text-slate-700">No Word Document Selected</h3>
+                <p className="text-xs text-slate-500">
+                  Select a standard operating procedure from the sidebar or click New Word SOP to create one.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create First Word Document</span>
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* =====================================================================
           NEW LOGISTICS WORD SOP MODAL (With .docx Upload & Banner Selector)
@@ -998,11 +1191,10 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                     type="text"
                     required
                     minLength={3}
-                    maxLength={200}
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g. Frozen Ice Cream & Dairy Cold Chain Standards"
-                    className="w-full p-2.5 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    placeholder="e.g. Frozen Food Cold Chain Relinquishment"
+                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 text-slate-900"
                   />
                 </div>
 
@@ -1011,109 +1203,86 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value as KnowledgeCategory)}
-                    className="w-full p-2.5 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 text-slate-900"
                   >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Banner Selector */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-slate-700 flex items-center justify-between">
-                  <span>Document Banner Picture / Infographic</span>
-                  <span className="text-[11px] text-slate-400 font-normal">
-                    Upload image or pick a logistics preset
-                  </span>
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newBannerUrl}
-                    onChange={(e) => setNewBannerUrl(e.target.value)}
-                    placeholder="https://... or upload picture below"
-                    className="flex-1 p-2 border border-slate-300 rounded text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => bannerImageInputRef.current?.click()}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded font-medium inline-flex items-center gap-1.5 shrink-0"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Upload Picture</span>
-                  </button>
-                </div>
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700">Banner / Diagram Image URL</label>
+                <input
+                  type="text"
+                  value={newBannerUrl}
+                  onChange={(e) => setNewBannerUrl(e.target.value)}
+                  placeholder="Paste banner image URL or select from built-in diagrams"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-slate-900"
+                />
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700">Executive Summary</label>
+                <label className="font-semibold text-slate-700">Executive Policy Summary</label>
                 <textarea
                   required
-                  minLength={5}
-                  maxLength={1000}
                   rows={2}
                   value={newSummary}
                   onChange={(e) => setNewSummary(e.target.value)}
-                  placeholder="High-level policy summary for call center agents..."
-                  className="w-full p-2.5 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="High-level mandate and compliance requirement for this logistics process..."
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700">
-                  Step-by-Step Standard Operating Procedure (Word Manual Content)
+                  Standard Operating Procedure (Steps, 1 per line)
                 </label>
                 <textarea
                   required
-                  minLength={10}
-                  maxLength={18000}
                   rows={5}
                   value={newContent}
                   onChange={(e) => setNewContent(e.target.value)}
-                  placeholder="1. Verify delivery receipt photo&#10;2. Check transit time&#10;3. Apply instant credit or dispatch replacement..."
-                  className="w-full p-2.5 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono text-xs"
+                  placeholder="1. Verify driver temperature recorder&#10;2. Confirm seal integrity&#10;3. Log time and batch ID..."
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700">
-                  1-Click Case Note Resolution Snippet
+                  Fast Resolution Case Note Snippet
                 </label>
                 <input
                   type="text"
-                  required
-                  minLength={5}
-                  maxLength={2000}
                   value={newSop}
                   onChange={(e) => setNewSop(e.target.value)}
-                  placeholder="e.g. Verified cold chain claim per KB-INSTA-101. Issued credit and triggered redelivery."
-                  className="w-full p-2.5 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="Quick note agents can inject into active case (e.g. Applied KB-INSTA-101 cold chain credit)"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-slate-900"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded inline-flex items-center gap-1.5 shadow-xs"
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-semibold inline-flex items-center gap-1.5 shadow-xs"
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <FileText className="w-3.5 h-3.5" />
+                    <Check className="w-3.5 h-3.5" />
                   )}
-                  <span>Publish Word SOP (.docx)</span>
+                  <span>Create Word SOP Document</span>
                 </button>
               </div>
             </form>
