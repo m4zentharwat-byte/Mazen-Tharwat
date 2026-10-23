@@ -1,12 +1,39 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+export const firebaseConfig = {
+  apiKey: "AIzaSyAt4rAlaNMOP3DoPm8jBTyRrR81uzlXVjQ",
+  authDomain: "csr-tool-2d6c0.firebaseapp.com",
+  projectId: "csr-tool-2d6c0",
+  storageBucket: "csr-tool-2d6c0.firebasestorage.app",
+  messagingSenderId: "944932388435",
+  appId: "1:944932388435:web:f5a4db9296d105dc1350a6",
+  measurementId: "G-T2K3YV2JXL"
+};
+
+// Initialize Firebase
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Initialize Firebase Analytics safely (supporting web, SSR, and iframe environments)
+export let analytics: Analytics | null = null;
+if (typeof window !== 'undefined') {
+  isSupported()
+    .then((supported) => {
+      if (supported) {
+        analytics = getAnalytics(app);
+      }
+    })
+    .catch((err) => {
+      console.warn('Firebase Analytics not supported in this environment:', err);
+    });
+}
 
 export enum OperationType {
   CREATE = 'create',
