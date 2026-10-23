@@ -3,21 +3,14 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-export const firebaseConfig = {
-  apiKey: "AIzaSyAt4rAlaNMOP3DoPm8jBTyRrR81uzlXVjQ",
-  authDomain: "csr-tool-2d6c0.firebaseapp.com",
-  projectId: "csr-tool-2d6c0",
-  storageBucket: "csr-tool-2d6c0.firebasestorage.app",
-  messagingSenderId: "944932388435",
-  appId: "1:944932388435:web:f5a4db9296d105dc1350a6",
-  measurementId: "G-T2K3YV2JXL"
-};
+import firebaseAppletConfig from '../firebase-applet-config.json';
+
+// Your web app's Firebase configuration loaded from provisioned configuration
+export const firebaseConfig = firebaseAppletConfig;
 
 // Initialize Firebase
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 

@@ -1,9 +1,12 @@
 {
   "projectId": "csr-tool-2d6c0",
-  "appId": "1:944932388435:web:f5a4db9296d105dc1350a6",
+  "appId": "1:944932388435:web:3951d10f90c51c5b1350a6",
   "apiKey": "AIzaSyAt4rAlaNMOP3DoPm8jBTyRrR81uzlXVjQ",
   "authDomain": "csr-tool-2d6c0.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-972b4f69-33f0-4437-b033-e68bfff9ba80",
   "storageBucket": "csr-tool-2d6c0.firebasestorage.app",
   "messagingSenderId": "944932388435",
-  "measurementId": "G-T2K3YV2JXL"
+  "measurementId": "",
+  "oAuthClientId": "944932388435-7fmcoclbga89ri7vp3ora9faco21v18i.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }
